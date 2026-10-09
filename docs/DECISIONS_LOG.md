@@ -33,3 +33,11 @@
 - Suggested is personalised when the user has any signal (interests, preferred categories or followed clubs); otherwise it falls back to popularity (`personalized: false`). Saved events are excluded for logged-in users.
 - Top 10 and Suggested return `score_breakdown` (normalised components + weighted contributions) for transparency.
 - `GET /home/tomorrow` and `/home/next-7-days` accept `limit` (default 50, max 50), unpaginated.
+- Saving requires a publicly visible event (404 otherwise). Save is idempotent: 201 on create, 200 with the existing record on repeat; a concurrent duplicate is resolved by the unique `{user_id, event_id}` index and returns the existing record.
+- Unsave is idempotent (always 204). Instead of inserting a new interaction it *retracts* the user's latest `save` interaction, so save/unsave cycles cannot inflate windowed ranking (deviation from "insert an interaction" in the prompt; the write still spans saved_events + events.stats + event_interactions in one transaction). `stats.saves` is never decremented below 0.
+- Views and registration clicks also run in a transaction (log insert + counter `$inc`, plus the saved-status flip for clicks) so counter and log cannot drift apart.
+- Anonymous views are recorded with `user_id: null` and cannot be de-duplicated (`# PHASE2:` rate limiting). Signed-in repeat views within 30 minutes return `{"recorded": false}`.
+- `registration-click` returns 400 `no_registration` if registration isn't required / has no URL, and 409 `registration_closed` when `registration_open` is false (deadline passed or event started).
+- `GET /saved-events`: `upcoming=true` is chronological (soonest first); without it, most recent event first. Cancelled events stay in the list with `cancelled: true`. Paginated like other lists.
+- `GET /calendar` groups with `$dateToString` in `Asia/Kolkata`; cancelled saved events appear flagged rather than hidden.
+- Tests use a cheap argon2 hasher (`tests/conftest.py`); production uses library defaults.

@@ -7,7 +7,7 @@ from app import db as db_module
 from app.config import get_settings
 from app.core.errors import register_error_handlers
 from app.indexes import create_indexes
-from app.routers import admin, auth, clubs, events, files, home, meta, users
+from app.routers import admin, auth, clubs, events, files, home, meta, saved, users
 from app.services.settings import ensure_ranking_settings
 from app.services.users import bootstrap_platform_admin
 from app.validators import apply_validators
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
         clubs.router,
         events.router,
         home.router,
+        saved.router,
         files.router,
         meta.router,
         admin.router,

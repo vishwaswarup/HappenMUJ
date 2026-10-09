@@ -12,10 +12,18 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 
+# Tests only: cheap argon2 parameters (production keeps the library defaults).
+from argon2 import PasswordHasher  # noqa: E402
+
 from app import db as db_module  # noqa: E402
-from app.core import timeutil  # noqa: E402
+from app.core import (
+    security,  # noqa: E402
+    timeutil,  # noqa: E402
+)
 from app.db import COLLECTIONS  # noqa: E402
 from app.main import app, prepare_database  # noqa: E402
+
+security._hasher = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)

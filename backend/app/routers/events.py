@@ -9,7 +9,8 @@ from app.core.errors import ErrorResponse
 from app.models.common import Page, PageParams, to_oid
 from app.models.discovery import CataloguePage
 from app.models.events import CancelIn, EventCreate, EventDetail, EventPatch
-from app.services import discovery
+from app.models.saved import RegistrationClickOut, ViewOut
+from app.services import discovery, interactions
 from app.services import events as svc
 from app.services.event_view import to_detail
 from app.services.files import MAX_POSTER_BYTES
@@ -122,3 +123,23 @@ async def delete_event(event_id: str, db: DB, user: CurrentUser) -> None:
 async def upload_poster(event_id: str, db: DB, user: CurrentUser, file: Annotated[UploadFile, File()]) -> EventDetail:
     data = await file.read(MAX_POSTER_BYTES + 1)  # never buffer more than the limit + 1 byte
     return _detail(await svc.set_poster(db, user, to_oid(event_id, "event id"), data, file.content_type))
+
+
+@router.post(
+    "/{event_id}/view",
+    response_model=ViewOut,
+    responses={404: {"model": ErrorResponse}},
+    summary="Record a view (a user's repeat views within 30 minutes are ignored)",
+)
+async def record_view(event_id: str, db: DB, user: OptionalUser) -> ViewOut:
+    return ViewOut(recorded=await interactions.record_view(db, user, to_oid(event_id, "event id")))
+
+
+@router.post(
+    "/{event_id}/registration-click",
+    response_model=RegistrationClickOut,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    summary="Record a click on Register and return the external URL (we never claim a student registered)",
+)
+async def registration_click(event_id: str, db: DB, user: OptionalUser) -> RegistrationClickOut:
+    return RegistrationClickOut(**await interactions.record_registration_click(db, user, to_oid(event_id, "event id")))
