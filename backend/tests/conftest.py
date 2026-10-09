@@ -157,3 +157,83 @@ async def make_event(client, event_payload):
         return r.json() if status != "draft" else ev
 
     return _make
+
+
+NOW = None  # set per test via freeze()
+
+
+@pytest.fixture
+def freeze():
+    """Freeze the app clock. Default: 2026-10-09 12:00 IST (06:30 UTC)."""
+    from datetime import UTC, datetime
+
+    def _freeze(dt: datetime | None = None) -> datetime:
+        dt = dt or datetime(2026, 10, 9, 6, 30, tzinfo=UTC)
+        timeutil.freeze_time(dt)
+        return dt
+
+    return _freeze
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_doc(db):
+    """Insert a published event document directly (full control over time/stats/status)."""
+    from datetime import timedelta
+
+    from bson import ObjectId
+
+    from app.core import timeutil as tu
+
+    n = 0
+
+    async def _make(club: dict, start, *, hours: int = 2, **over) -> dict:
+        nonlocal n
+        n += 1
+        now = tu.now()
+        doc = {
+            "title": f"Event {n}",
+            "one_liner": f"One liner {n}",
+            "description": "",
+            "club_id": ObjectId(club["id"]),
+            "club_snapshot": {"name": club["name"], "slug": club["slug"]},
+            "creator_id": ObjectId(),
+            "category": "technical",
+            "event_type": "workshop",
+            "tags": [],
+            "poster_file_id": None,
+            "schedule": {"start": start, "end": start + timedelta(hours=hours)},
+            "venue": {"name": "AB3", "building": "AB3", "room": None},
+            "fee": {"type": "free", "amount": None, "currency": "INR"},
+            "team": {"type": "individual", "min": None, "max": None},
+            "registration": {"required": True, "platform": "other", "url": "https://x.example.com", "deadline": None},
+            "contact": None,
+            "details": {},
+            "status": "published",
+            "rejection_reason": None,
+            "cancel_reason": None,
+            "cancelled_at": None,
+            "featured": {"is_featured": False, "featured_at": None},
+            "stats": {"views": 0, "saves": 0, "registration_clicks": 0},
+            "change_log": [],
+            "created_at": now,
+            "updated_at": now,
+            "published_at": now,
+            "schema_v": 1,
+        }
+        doc.update(over)
+        doc["_id"] = (await db.events.insert_one(doc)).inserted_id
+        return doc
+
+    return _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def interactions(db):
+    from bson import ObjectId
+
+    async def _add(event, kind: str, ts, count: int = 1):
+        await db.event_interactions.insert_many(
+            [{"event_id": event["_id"], "user_id": ObjectId(), "type": kind, "ts": ts} for _ in range(count)]
+        )
+
+    return _add

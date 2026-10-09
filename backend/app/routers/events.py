@@ -1,12 +1,15 @@
+from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 
 from app.core import timeutil
 from app.core.deps import DB, CurrentUser, OptionalUser, require_role
 from app.core.errors import ErrorResponse
 from app.models.common import Page, PageParams, to_oid
+from app.models.discovery import CataloguePage
 from app.models.events import CancelIn, EventCreate, EventDetail, EventPatch
+from app.services import discovery
 from app.services import events as svc
 from app.services.event_view import to_detail
 from app.services.files import MAX_POSTER_BYTES
@@ -21,6 +24,30 @@ ClubStaff = Annotated[dict, Depends(require_role("club_admin", "platform_admin")
 
 def _detail(doc: dict) -> EventDetail:
     return to_detail(doc, timeutil.now())
+
+
+@router.get(
+    "",
+    response_model=CataloguePage,
+    summary="Catalogue: search, filters (OR within a group, AND between groups), sort, facets",
+)
+async def catalogue(
+    db: DB,
+    user: OptionalUser,
+    pp: Annotated[PageParams, Depends()],
+    q: Annotated[str | None, Query(min_length=1, max_length=100, description="Weighted full-text search")] = None,
+    category: Annotated[list[str] | None, Query(description="Repeatable; OR within the group")] = None,
+    club: Annotated[list[str] | None, Query(description="Repeatable club id or slug; OR within the group")] = None,
+    date_from: Annotated[date | None, Query(description="IST calendar date, inclusive")] = None,
+    date_to: Annotated[date | None, Query(description="IST calendar date, inclusive")] = None,
+    sort: Literal["date", "popularity", "relevance"] | None = None,
+) -> CataloguePage:
+    now = timeutil.now()
+    cards, total, facets = await discovery.catalogue(
+        db, user, now, q=q, categories=category or [], clubs=club or [], date_from=date_from, date_to=date_to,
+        sort=sort, skip=pp.skip, limit=pp.page_size,
+    )  # fmt: skip
+    return CataloguePage(items=cards, total=total, page=pp.page, page_size=pp.page_size, facets=facets)
 
 
 @router.post(

@@ -23,3 +23,13 @@
 - Poster: declared Content-Type must be allowed AND magic bytes must match it (415 otherwise); >5 MB is 413. Replacing a poster uploads the new file first, then deletes the old. File ids are unguessable but poster GET is unauthenticated (drafts' posters are reachable by id).
 - `GET /meta/categories` also returns the event types.
 - Frontend: not started; user will supply design references and logos later.
+- Catalogue default window: events with `end >= now` (upcoming + ongoing). Passing `date_from`/`date_to` switches to a start-date range so past events can be browsed; both are IST calendar dates, inclusive.
+- Catalogue facets are *disjunctive*: category counts ignore the category filter and club counts ignore the club filter (but each respects the other filters and `q`), so a user can widen a selection. `total` is exact for the full filter.
+- Added `sort=relevance` (text score, default when `q` is given); `date` and `popularity` as specified. `relevance` without `q` is 422. Catalogue popularity = saves*3 + registration_clicks*2 + views (all-time counters); Top 10 uses windowed interactions instead.
+- Unknown `category` filter values are 422; unknown club refs just match nothing. Only verified clubs resolve in the `club` filter.
+- Featured "upcoming" means `start > now`. Home response wrappers: `{source, event}` for featured, `{personalized, items}` for suggested, `{items}` for tomorrow/next-7-days, `{window_days, disclaimer, items}` for top events.
+- Top 10 / Suggested eligibility: public, `start > now`, and (if registration required) deadline not passed; events with `registration.required == false` stay eligible (urgency 0).
+- Urgency = 1.0 if a required registration's deadline is within 72h, 0.5 if required and otherwise open, else 0. `rank` is assigned after the DB sort/limit.
+- Suggested is personalised when the user has any signal (interests, preferred categories or followed clubs); otherwise it falls back to popularity (`personalized: false`). Saved events are excluded for logged-in users.
+- Top 10 and Suggested return `score_breakdown` (normalised components + weighted contributions) for transparency.
+- `GET /home/tomorrow` and `/home/next-7-days` accept `limit` (default 50, max 50), unpaginated.
