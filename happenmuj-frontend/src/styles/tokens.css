@@ -1,0 +1,49 @@
+/* Design tokens. Dark first, with a light theme that follows the system and the in-app toggle.
+   One type pair (Big Shoulders Display for headings, Hanken Grotesk for text), a 4/8px spacing scale, one corner radius. */
+:root {
+  --bg: #12100e;
+  --surface: #1b1815;
+  --surface-2: #25211d;
+  --line: #36312a;
+  --fg: #f3ede2;
+  --muted: #a89f90;
+  --accent: #d63d27;
+  --accent-ink: #ffffff;
+  --accent-text: #ff7a63;
+  --ok: #7cc47f;
+  --warn: #e6b450;
+  --bad: #ff7a68;
+  --focus: #f3b24a;
+  --verified-ink: #1b1815;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --scrim: rgba(8, 7, 6, 0.7);
+  color-scheme: dark;
+
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', Impact, sans-serif;
+  --font-body: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --s1: 4px; --s2: 8px; --s3: 16px; --s4: 24px; --s5: 32px; --s6: 48px; --s7: 64px;
+  --radius: 6px;
+  --gutter: 16px;
+  --maxw: 1240px;
+  --header-h: 64px;
+}
+
+@media (min-width: 720px) { :root { --gutter: 32px; } }
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #f6f1e7; --surface: #fffdf8; --surface-2: #eee6d7; --line: #d8cfbd;
+    --fg: #1d1a16; --muted: #62594b; --accent: #c4361f; --accent-text: #b02f1a;
+    --ok: #2f7a36; --warn: #8a5a00; --bad: #b3261e; --focus: #8a5a00;
+    --verified-ink: #fffdf8; --shadow: 0 8px 24px rgba(60, 40, 10, 0.14); --scrim: rgba(30, 24, 14, 0.5);
+    color-scheme: light;
+  }
+}
+:root[data-theme='light'] {
+  --bg: #f6f1e7; --surface: #fffdf8; --surface-2: #eee6d7; --line: #d8cfbd;
+  --fg: #1d1a16; --muted: #62594b; --accent: #c4361f; --accent-text: #b02f1a;
+  --ok: #2f7a36; --warn: #8a5a00; --bad: #b3261e; --focus: #8a5a00;
+  --verified-ink: #fffdf8; --shadow: 0 8px 24px rgba(60, 40, 10, 0.14); --scrim: rgba(30, 24, 14, 0.5);
+  color-scheme: light;
+}
