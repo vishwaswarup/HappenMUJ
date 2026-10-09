@@ -12,3 +12,14 @@
 - Following a club requires it to be verified; unfollowing is always allowed.
 - Platform admin bootstrap runs at startup, upserts by email, sets role, and never overwrites an existing password.
 - `GET /admin/users` and `PATCH /admin/users/{id}/role` were built in M1 (they are role management).
+- `details` is validated by a discriminated union; the tag is derived from `event_type` (clients send `details` without a type tag) and is not stored.
+- PATCH replaces embedded groups (schedule, venue, fee, team, registration, contact, details) as a whole, then re-validates the merged event; no-op patches write nothing and log nothing.
+- Edits are allowed in draft, pending_review, rejected and published; cancelled events are not editable (409). `change_log` records every real edit in any of those states.
+- `submit` rejects events that have already started (400 `event_in_past`).
+- Cancelled events 404 on the public detail endpoint (spec: public only if published); club admins and platform admins still see them.
+- `registration.required` needs a `url`; `registration.deadline` may not be after the event ends; `fee.amount` must be omitted for free/not_specified.
+- Added `PATCH /clubs/{club_id}` (club admin / platform admin) so a rename can refresh `events.club_snapshot.name` in a transaction (design-doc trade-off made concrete). Slug stays stable on rename.
+- Schedule edits update `saved_events.event_start` in the same transaction as the event write.
+- Poster: declared Content-Type must be allowed AND magic bytes must match it (415 otherwise); >5 MB is 413. Replacing a poster uploads the new file first, then deletes the old. File ids are unguessable but poster GET is unauthenticated (drafts' posters are reachable by id).
+- `GET /meta/categories` also returns the event types.
+- Frontend: not started; user will supply design references and logos later.

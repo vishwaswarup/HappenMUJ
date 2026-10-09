@@ -2,10 +2,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.deps import DB, CurrentUser, OptionalUser
+from app.core.deps import DB, CurrentUser, OptionalUser, require_club_admin_for
 from app.core.errors import ErrorResponse, not_found
-from app.models.clubs import ClubCreate, ClubOut
-from app.models.common import Page, PageParams
+from app.models.clubs import ClubCreate, ClubOut, ClubPatch
+from app.models.common import Page, PageParams, to_oid
 from app.services import clubs as svc
 from app.services.serializers import club_out
 
@@ -46,3 +46,14 @@ async def get_club(id_or_slug: str, db: DB, user: OptionalUser) -> ClubOut:
 )
 async def request_club(data: ClubCreate, db: DB, user: CurrentUser) -> ClubOut:
     return club_out(await svc.request_club(db, user["_id"], data))
+
+
+@router.patch(
+    "/{club_id}",
+    response_model=ClubOut,
+    responses={403: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    dependencies=[Depends(require_club_admin_for("club_id"))],
+    summary="Edit a club (rename refreshes event snapshots in a transaction)",
+)
+async def update_club(club_id: str, patch: ClubPatch, db: DB) -> ClubOut:
+    return club_out(await svc.update_club(db, to_oid(club_id, "club id"), patch))

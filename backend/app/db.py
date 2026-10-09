@@ -58,3 +58,9 @@ def get_client() -> AsyncMongoClient:
 def get_bucket() -> AsyncGridFSBucket:
     """GridFS bucket (``fs.files`` / ``fs.chunks``) used for event posters."""
     return AsyncGridFSBucket(get_db())
+
+
+async def run_txn(callback):
+    """Run ``callback(session)`` in a multi-document transaction (auto-retries transient errors)."""
+    async with get_client().start_session() as session:
+        return await session.with_transaction(callback)

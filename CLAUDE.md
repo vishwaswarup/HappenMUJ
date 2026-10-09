@@ -43,5 +43,5 @@ Python 3.12, FastAPI, Pydantic v2, `pymongo.AsyncMongoClient` (NOT Motor), Mongo
 - Ambiguities: choose sensibly, add one line to `docs/DECISIONS_LOG.md`.
 
 ## Milestones
-M0 scaffold ✅ · M1 auth/clubs ✅ · M2 events+GridFS · M3 discovery/ranking · M4 saved/calendar/transactions ·
+M0 scaffold ✅ · M1 auth/clubs ✅ · M2 events+GridFS ✅ · M3 discovery/ranking · M4 saved/calendar/transactions ·
 M5 community · M6 seed+analytics · M7 docs. Commit after each; summarize at the end of each.

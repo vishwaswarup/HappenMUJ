@@ -109,3 +109,51 @@ async def make_club(client, admin, make_user):
         return club, owner
 
     return _make
+
+
+@pytest.fixture
+def event_payload():
+    """Build a valid event body; override any field via kwargs."""
+    from datetime import UTC, datetime, timedelta
+
+    def _make(club_id: str, **over) -> dict:
+        start = datetime.now(UTC) + timedelta(days=5)
+        body = {
+            "club_id": club_id,
+            "title": "Intro to GenAI",
+            "one_liner": "Hands-on workshop on building with LLMs.",
+            "description": "Bring a laptop.",
+            "category": "technical",
+            "event_type": "workshop",
+            "tags": ["AI", "GenAI"],
+            "schedule": {"start": start.isoformat(), "end": (start + timedelta(hours=2)).isoformat()},
+            "venue": {"name": "AB3 Seminar Hall", "building": "AB3"},
+            "fee": {"type": "free"},
+            "team": {"type": "individual"},
+            "registration": {"required": True, "platform": "google_forms", "url": "https://forms.gle/x"},
+            "details": {"topics": ["LLMs"], "bring_own_laptop": True},
+        }
+        body.update(over)
+        return body
+
+    return _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_event(client, event_payload):
+    async def _make(club_id: str, actor, *, status: str = "draft", admin=None, **over) -> dict:
+        r = await client.post("/events", headers=actor.headers, json=event_payload(club_id, **over))
+        assert r.status_code == 201, r.text
+        ev = r.json()
+        if status in ("pending_review", "published", "cancelled"):
+            r = await client.post(f"/events/{ev['id']}/submit", headers=actor.headers)
+            assert r.status_code == 200, r.text
+        if status in ("published", "cancelled"):
+            r = await client.post(f"/admin/events/{ev['id']}/approve", headers=admin.headers)
+            assert r.status_code == 200, r.text
+        if status == "cancelled":
+            r = await client.post(f"/events/{ev['id']}/cancel", headers=actor.headers, json={"reason": "Speaker ill"})
+            assert r.status_code == 200, r.text
+        return r.json() if status != "draft" else ev
+
+    return _make

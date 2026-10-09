@@ -1,14 +1,25 @@
+from datetime import datetime
 from typing import Annotated, Generic, TypeVar
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import Query
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel
 
 from app.core.errors import AppError
+from app.core.timeutil import ensure_utc
 from app.validators import CATEGORIES
 
 T = TypeVar("T")
+
+
+def _to_utc(v: datetime) -> datetime:
+    """Reject naive datetimes, convert offsets to UTC, truncate to ms (BSON Date precision)."""
+    v = ensure_utc(v)
+    return v.replace(microsecond=(v.microsecond // 1000) * 1000)
+
+
+UTCDateTime = Annotated[datetime, AfterValidator(_to_utc)]
 
 SCHEMA_VERSION = 1  # stored as `schema_v` on every document (schema versioning pattern)
 
@@ -50,4 +61,4 @@ def normalize_terms(values: list[str], limit: int = 20) -> list[str]:
     return list(seen)[:limit]
 
 
-__all__ = ["CATEGORIES", "Page", "PageParams", "SCHEMA_VERSION", "normalize_terms", "to_oid"]
+__all__ = ["UTCDateTime", "CATEGORIES", "Page", "PageParams", "SCHEMA_VERSION", "normalize_terms", "to_oid"]

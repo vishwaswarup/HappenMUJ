@@ -60,3 +60,16 @@ class ClubOut(BaseModel):
 
 class AddAdminIn(BaseModel):
     user_id: str
+
+
+class ClubPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    description: str | None = Field(default=None, max_length=2000)
+    category: str | None = None
+
+    @field_validator("category")
+    @classmethod
+    def _cat(cls, v: str | None) -> str | None:
+        if v is not None and v not in CATEGORIES:
+            raise ValueError(f"unknown category; allowed: {CATEGORIES}")
+        return v

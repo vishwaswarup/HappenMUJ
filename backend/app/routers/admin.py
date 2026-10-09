@@ -2,13 +2,17 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 
+from app.core import timeutil
 from app.core.deps import DB, PlatformAdmin
 from app.core.errors import ErrorResponse
 from app.models.clubs import AddAdminIn, ClubOut
 from app.models.common import Page, PageParams, to_oid
+from app.models.events import EventDetail, RejectIn
 from app.models.users import RoleChange, UserOut
 from app.services import clubs as clubs_svc
+from app.services import events as events_svc
 from app.services import users as users_svc
+from app.services.event_view import to_detail
 from app.services.serializers import club_out, user_out
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -61,3 +65,49 @@ async def list_users(
 @router.patch("/users/{user_id}/role", response_model=UserOut, responses=_errors)
 async def change_role(user_id: str, body: RoleChange, db: DB, admin: PlatformAdmin) -> UserOut:
     return user_out(await users_svc.set_role(db, admin["_id"], to_oid(user_id, "user id"), body.role))
+
+
+# ---- event moderation
+EventStatusFilter = Literal["draft", "pending_review", "published", "rejected", "cancelled", "all"]
+
+
+def _ev(doc: dict) -> EventDetail:
+    return to_detail(doc, timeutil.now())
+
+
+@router.get(
+    "/events", response_model=Page[EventDetail], responses=_errors, summary="Events by status (default: review queue)"
+)
+async def list_events(
+    db: DB, _: PlatformAdmin, pp: Annotated[PageParams, Depends()], status: EventStatusFilter = "pending_review"
+) -> Page[EventDetail]:
+    items, total = await events_svc.list_for_admin(db, pp.skip, pp.page_size, None if status == "all" else status)
+    return Page(items=[_ev(e) for e in items], total=total, page=pp.page, page_size=pp.page_size)
+
+
+@router.post(
+    "/events/{event_id}/approve", response_model=EventDetail, responses=_errors, summary="pending_review -> published"
+)
+async def approve_event(event_id: str, db: DB, _: PlatformAdmin) -> EventDetail:
+    return _ev(await events_svc.approve_event(db, to_oid(event_id, "event id")))
+
+
+@router.post(
+    "/events/{event_id}/reject", response_model=EventDetail, responses=_errors, summary="pending_review -> rejected"
+)
+async def reject_event(event_id: str, body: RejectIn, db: DB, _: PlatformAdmin) -> EventDetail:
+    return _ev(await events_svc.reject_event(db, to_oid(event_id, "event id"), body.reason))
+
+
+@router.post(
+    "/events/{event_id}/feature", response_model=EventDetail, responses=_errors, summary="Feature a published event"
+)
+async def feature_event(event_id: str, db: DB, _: PlatformAdmin) -> EventDetail:
+    return _ev(await events_svc.set_featured(db, to_oid(event_id, "event id"), True))
+
+
+@router.delete(
+    "/events/{event_id}/feature", response_model=EventDetail, responses=_errors, summary="Remove featured flag"
+)
+async def unfeature_event(event_id: str, db: DB, _: PlatformAdmin) -> EventDetail:
+    return _ev(await events_svc.set_featured(db, to_oid(event_id, "event id"), False))

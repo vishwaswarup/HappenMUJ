@@ -1,12 +1,14 @@
 import re
 
 from bson import ObjectId
+from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import DuplicateKeyError
 
+from app import db as db_module
 from app.core import timeutil
-from app.core.errors import conflict, not_found
-from app.models.clubs import ClubCreate
+from app.core.errors import bad_request, conflict, not_found
+from app.models.clubs import ClubCreate, ClubPatch
 from app.models.common import SCHEMA_VERSION
 
 
@@ -89,4 +91,35 @@ async def remove_admin(db: AsyncDatabase, club_id: ObjectId, user_id: ObjectId) 
     # Demote only if they no longer administer any club.
     if not await db.clubs.find_one({"admin_ids": user_id}, {"_id": 1}):
         await db.users.update_one({"_id": user_id, "role": "club_admin"}, {"$set": {"role": "student"}})
+    return club
+
+
+async def update_club(db: AsyncDatabase, club_id: ObjectId, patch: ClubPatch) -> dict:
+    """Edit a club. A rename must also refresh ``events.club_snapshot`` (the cost of the extended
+    reference pattern), so both writes happen in one transaction. The slug stays stable."""
+    changes = patch.model_dump(exclude_unset=True, exclude_none=True)
+    if not changes:
+        raise bad_request("Nothing to update")
+    if "name" in changes:
+        changes["name"] = changes["name"].strip()
+        clash = await db.clubs.find_one(
+            {"_id": {"$ne": club_id}, "name": {"$regex": f"^{re.escape(changes['name'])}$", "$options": "i"}},
+            {"_id": 1},
+        )
+        if clash:
+            raise conflict("A club with this name already exists", "club_exists")
+
+    async def write(session):
+        club = await db.clubs.find_one_and_update(
+            {"_id": club_id}, {"$set": changes}, return_document=ReturnDocument.AFTER, session=session
+        )
+        if club and "name" in changes:
+            await db.events.update_many(
+                {"club_id": club_id}, {"$set": {"club_snapshot.name": changes["name"]}}, session=session
+            )
+        return club
+
+    club = await db_module.run_txn(write)
+    if not club:
+        raise not_found("Club")
     return club
