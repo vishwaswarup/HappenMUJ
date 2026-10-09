@@ -18,8 +18,11 @@ Python 3.12, FastAPI, Pydantic v2, `pymongo.AsyncMongoClient` (NOT Motor), Mongo
 - Async PyMongo gotcha: `find()` returns a cursor, but `aggregate()` is a coroutine: `await (await coll.aggregate(p)).to_list(n)` (helper: `discovery.agg`).
 - Transactions: `db.run_txn(callback)`; txn steps live in small module-level functions (so tests can monkeypatch one to force a rollback).
 - When editing files with string replace, ASSERT the pattern exists (ruff reformatting has made silent no-op replaces bite twice).
+- Generated docs (don't hand-edit): `scripts/gen_api_docs.py` -> docs/API.md; `scripts/gen_aggregation_showcase.py` (needs a seeded DB) -> docs/AGGREGATION_SHOWCASE.md. Rerun after changing routes/pipelines/seed.
+- SQL comparison files in docs/sql/ were executed on PostgreSQL 16; if you change them, re-run to verify.
+- Port 8000 is often busy on the dev machine (another project); use `--port 8001`.
 - Pipelines are built by pure functions in `services/discovery.py` (reused for docs/explain).
-- Seed (M6): `python -m app.seed --reset`
+- Seed: `python -m app.seed --reset` (~20s; WIPES the configured DB; relative to now; prints sample logins; all seeded passwords `password123`)
 - Config: `backend/.env` (see `.env.example`). Empty `ALLOWED_EMAIL_DOMAINS` = allow any email (dev).
 
 ## Layout
@@ -48,4 +51,4 @@ Python 3.12, FastAPI, Pydantic v2, `pymongo.AsyncMongoClient` (NOT Motor), Mongo
 
 ## Milestones
 M0 scaffold ✅ · M1 auth/clubs ✅ · M2 events+GridFS ✅ · M3 discovery/ranking ✅ · M4 saved/calendar/transactions ✅ ·
-M5 community ✅ · M6 seed+analytics · M7 docs. Summarize at the end of each. **Do NOT run git commit/add**: M0-M4 were committed by Claude at the user's original instruction; from M5 on the user commits.
+M5 community ✅ · M6 seed+analytics ✅ · M7 docs ✅ (backend complete). Summarize at the end of each. **Do NOT run git commit/add**: M0-M4 were committed by Claude at the user's original instruction; from M5 on the user commits.

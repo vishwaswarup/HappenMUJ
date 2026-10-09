@@ -108,6 +108,20 @@ def _to_out(row: dict, now: datetime) -> SavedEventOut:
     )  # fmt: skip
 
 
+def saved_list_pipeline(user_id: ObjectId, now: datetime, *, upcoming: bool, skip: int, limit: int) -> list[dict]:
+    """A user's saved events: range/sort on the saved_events index, then a $lookup for the event card."""
+    flt: dict = {"user_id": user_id}
+    if upcoming:
+        flt["event_start"] = {"$gte": now}
+    return [
+        {"$match": flt},
+        {"$sort": {"event_start": 1 if upcoming else -1, "_id": 1}},
+        {"$skip": skip},
+        {"$limit": limit},
+        *_lookup_event(now),
+    ]
+
+
 async def list_saved(
     db: AsyncDatabase, user_id: ObjectId, now: datetime, *, upcoming: bool, skip: int, limit: int
 ) -> tuple[list[SavedEventOut], int]:
@@ -115,14 +129,9 @@ async def list_saved(
     if upcoming:
         flt["event_start"] = {"$gte": now}
     total = await db.saved_events.count_documents(flt)
-    pipeline = [
-        {"$match": flt},
-        {"$sort": {"event_start": 1 if upcoming else -1, "_id": 1}},
-        {"$skip": skip},
-        {"$limit": limit},
-        *_lookup_event(now),
-    ]
-    rows = await (await db.saved_events.aggregate(pipeline)).to_list(limit)
+    rows = await (
+        await db.saved_events.aggregate(saved_list_pipeline(user_id, now, upcoming=upcoming, skip=skip, limit=limit))
+    ).to_list(limit)
     return [_to_out(r, now) for r in rows], total
 
 

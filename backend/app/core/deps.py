@@ -51,6 +51,7 @@ def require_role(*roles: str) -> Callable[..., Awaitable[dict]]:
             raise forbidden(f"Requires role: {' or '.join(roles)}")
         return user
 
+    dep.required_roles = roles  # introspected by scripts/gen_api_docs.py
     return dep
 
 
@@ -80,4 +81,5 @@ def require_club_admin_for(param: str = "club_id") -> Callable[..., Awaitable[di
         await ensure_club_admin(db, user, club_id)
         return user
 
+    dep.club_admin_guard = param  # introspected by scripts/gen_api_docs.py
     return dep

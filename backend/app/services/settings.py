@@ -3,6 +3,7 @@
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app.core import timeutil
+from app.models.common import SCHEMA_VERSION
 
 RANKING_ID = "ranking"
 DEFAULT_RANKING = {
@@ -13,7 +14,9 @@ DEFAULT_RANKING = {
 
 async def ensure_ranking_settings(db: AsyncDatabase) -> None:
     await db.settings.update_one(
-        {"_id": RANKING_ID}, {"$setOnInsert": {**DEFAULT_RANKING, "updated_at": timeutil.now()}}, upsert=True
+        {"_id": RANKING_ID},
+        {"$setOnInsert": {**DEFAULT_RANKING, "updated_at": timeutil.now(), "schema_v": SCHEMA_VERSION}},
+        upsert=True,
     )
 
 

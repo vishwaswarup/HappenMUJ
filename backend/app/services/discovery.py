@@ -386,26 +386,34 @@ async def suggested(
     return False, [ScoredEventCard(**c.model_dump(), score=0.0, score_breakdown=zero) for c in cards]
 
 
-async def featured(db: AsyncDatabase, user: dict | None, now: datetime) -> FeaturedOut:
-    pipe = [
+def featured_pipeline(now: datetime) -> list[dict]:
+    """The most recently featured upcoming event (served by the partial index on featured events)."""
+    return [
         {"$match": public_filter(**{"featured.is_featured": True, "schedule.start": {"$gt": now}})},
         {"$sort": {"featured.featured_at": -1}},
         {"$limit": 1},
         *card_tail(now),
     ]
-    docs = await agg(db, pipe, 1)
+
+
+def featured_fallback_pipeline(now: datetime) -> list[dict]:
+    """No featured event: the soonest upcoming one that has a poster and open registration."""
+    return [
+        {"$match": eligible_filter(now) | {"poster_file_id": {"$ne": None}, "registration.required": True}},
+        {"$sort": {"schedule.start": 1, "_id": 1}},
+        *card_tail(now)[:1],
+        {"$match": {"registration_open": True}},
+        {"$limit": 1},
+        *card_tail(now)[1:],
+    ]
+
+
+async def featured(db: AsyncDatabase, user: dict | None, now: datetime) -> FeaturedOut:
+    docs = await agg(db, featured_pipeline(now), 1)
     source = "featured"
     if not docs:
-        source = "fallback"  # soonest upcoming event with a poster and open registration
-        pipe = [
-            {"$match": eligible_filter(now) | {"poster_file_id": {"$ne": None}, "registration.required": True}},
-            {"$sort": {"schedule.start": 1, "_id": 1}},
-            *card_tail(now)[:1],
-            {"$match": {"registration_open": True}},
-            {"$limit": 1},
-            *card_tail(now)[1:],
-        ]
-        docs = await agg(db, pipe, 1)
+        source = "fallback"
+        docs = await agg(db, featured_fallback_pipeline(now), 1)
     if not docs:
         return FeaturedOut(source="none", event=None)
     return FeaturedOut(source=source, event=(await to_cards(db, docs, user, now))[0])

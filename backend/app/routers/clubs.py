@@ -20,7 +20,12 @@ async def list_clubs(
     return Page(items=[club_out(c) for c in items], total=total, page=pp.page, page_size=pp.page_size)
 
 
-@router.get("/{id_or_slug}", response_model=ClubOut, responses={404: {"model": ErrorResponse}})
+@router.get(
+    "/{id_or_slug}",
+    response_model=ClubOut,
+    responses={404: {"model": ErrorResponse}},
+    summary="One club by id or slug (unverified clubs: requester, its admins, platform admins only)",
+)
 async def get_club(id_or_slug: str, db: DB, user: OptionalUser) -> ClubOut:
     club = await svc.find_club(db, id_or_slug)
     # Unverified clubs are visible only to their requester, their admins and platform admins.

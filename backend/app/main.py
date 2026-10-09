@@ -7,10 +7,25 @@ from app import db as db_module
 from app.config import get_settings
 from app.core.errors import register_error_handlers
 from app.indexes import create_indexes
-from app.routers import admin, auth, clubs, community, events, files, home, meta, saved, users
+from app.routers import admin, analytics, auth, clubs, community, events, files, home, meta, saved, users
 from app.services.settings import ensure_ranking_settings
 from app.services.users import bootstrap_platform_admin
 from app.validators import apply_validators
+
+API_PREFIX = "/api/v1"
+ROUTERS = (
+    auth.router,
+    users.router,
+    clubs.router,
+    events.router,
+    home.router,
+    saved.router,
+    community.router,
+    analytics.router,
+    files.router,
+    meta.router,
+    admin.router,
+)  # also read by scripts/gen_api_docs.py
 
 
 async def prepare_database() -> None:
@@ -47,19 +62,8 @@ def create_app() -> FastAPI:
     )
     register_error_handlers(app)
 
-    api = APIRouter(prefix="/api/v1")
-    for r in (
-        auth.router,
-        users.router,
-        clubs.router,
-        events.router,
-        home.router,
-        saved.router,
-        community.router,
-        files.router,
-        meta.router,
-        admin.router,
-    ):
+    api = APIRouter(prefix=API_PREFIX)
+    for r in ROUTERS:
         api.include_router(r)
     app.include_router(api)
 

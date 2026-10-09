@@ -165,10 +165,14 @@ async def create_comment(db: AsyncDatabase, user: dict, post_id: ObjectId, data:
 async def list_comments(
     db: AsyncDatabase, post_id: ObjectId, *, skip: int, limit: int, replies: int
 ) -> tuple[list[dict], int]:
-    flt = {"post_id": post_id, "parent_id": None}
-    total = await db.comments.count_documents(flt)
-    pipeline: list[dict] = [
-        {"$match": flt},
+    total = await db.comments.count_documents({"post_id": post_id, "parent_id": None})
+    return await (await db.comments.aggregate(comments_pipeline(post_id, skip, limit, replies))).to_list(limit), total
+
+
+def comments_pipeline(post_id: ObjectId, skip: int, limit: int, replies: int) -> list[dict]:
+    """Top-level comments of a post, each with up to `replies` replies and the true reply count."""
+    return [
+        {"$match": {"post_id": post_id, "parent_id": None}},
         {"$sort": {"created_at": 1, "_id": 1}},
         {"$skip": skip},
         {"$limit": limit},
@@ -194,7 +198,6 @@ async def list_comments(
             }
         },
     ]
-    return await (await db.comments.aggregate(pipeline)).to_list(limit), total
 
 
 async def refresh_recent_comments(db: AsyncDatabase, session, post_id: ObjectId) -> None:

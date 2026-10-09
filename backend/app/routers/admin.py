@@ -32,7 +32,7 @@ async def list_clubs(
     return Page(items=[club_out(c) for c in items], total=total, page=pp.page, page_size=pp.page_size)
 
 
-@router.post("/clubs/{club_id}/verify", response_model=ClubOut, responses=_errors)
+@router.post("/clubs/{club_id}/verify", response_model=ClubOut, responses=_errors, summary="Verify a club")
 async def verify_club(club_id: str, db: DB, admin: PlatformAdmin) -> ClubOut:
     return club_out(await clubs_svc.verify_club(db, to_oid(club_id, "club id"), admin["_id"]))
 
@@ -47,12 +47,17 @@ async def add_club_admin(club_id: str, body: AddAdminIn, db: DB, _: PlatformAdmi
     return club_out(await clubs_svc.add_admin(db, to_oid(club_id, "club id"), to_oid(body.user_id, "user id")))
 
 
-@router.delete("/clubs/{club_id}/admins/{user_id}", response_model=ClubOut, responses=_errors)
+@router.delete(
+    "/clubs/{club_id}/admins/{user_id}",
+    response_model=ClubOut,
+    responses=_errors,
+    summary="Remove a club admin (demotes to student if they administer no other club)",
+)
 async def remove_club_admin(club_id: str, user_id: str, db: DB, _: PlatformAdmin) -> ClubOut:
     return club_out(await clubs_svc.remove_admin(db, to_oid(club_id, "club id"), to_oid(user_id, "user id")))
 
 
-@router.get("/users", response_model=Page[UserOut], responses=_errors)
+@router.get("/users", response_model=Page[UserOut], responses=_errors, summary="All users, filterable by role")
 async def list_users(
     db: DB,
     _: PlatformAdmin,
@@ -63,7 +68,7 @@ async def list_users(
     return Page(items=[user_out(u) for u in items], total=total, page=pp.page, page_size=pp.page_size)
 
 
-@router.patch("/users/{user_id}/role", response_model=UserOut, responses=_errors)
+@router.patch("/users/{user_id}/role", response_model=UserOut, responses=_errors, summary="Change a user's role")
 async def change_role(user_id: str, body: RoleChange, db: DB, admin: PlatformAdmin) -> UserOut:
     return user_out(await users_svc.set_role(db, admin["_id"], to_oid(user_id, "user id"), body.role))
 

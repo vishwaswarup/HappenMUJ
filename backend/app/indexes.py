@@ -8,7 +8,10 @@ from pymongo.asynchronous.database import AsyncDatabase
 EVENT_INTERACTION_TTL_SECONDS = 90 * 24 * 3600
 
 INDEXES: dict[str, list[IndexModel]] = {
-    "users": [IndexModel([("email", ASC)], unique=True, name="email_unique")],
+    "users": [
+        IndexModel([("email", ASC)], unique=True, name="email_unique"),
+        IndexModel([("followed_club_ids", ASC)], name="followed_clubs_multikey"),  # multikey: club follower counts
+    ],
     "clubs": [
         IndexModel([("slug", ASC)], unique=True, name="slug_unique"),
         IndexModel([("admin_ids", ASC)], name="admin_ids_multikey"),  # multikey

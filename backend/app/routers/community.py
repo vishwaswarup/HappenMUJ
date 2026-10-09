@@ -42,7 +42,12 @@ async def list_posts(
     return Page(items=await svc.posts_out(db, user, posts), total=total, page=pp.page, page_size=pp.page_size)
 
 
-@router.get("/posts/{post_id}", response_model=PostOut, responses={404: {"model": ErrorResponse}})
+@router.get(
+    "/posts/{post_id}",
+    response_model=PostOut,
+    responses={404: {"model": ErrorResponse}},
+    summary="One post with its last 3 comments (removed posts: platform admins only)",
+)
 async def get_post(post_id: str, db: DB, user: OptionalUser) -> PostOut:
     post = await svc.get_post(db, to_oid(post_id, "post id"), user)
     return (await svc.posts_out(db, user, [post]))[0]
@@ -65,7 +70,12 @@ async def create_comment(post_id: str, data: CommentCreate, db: DB, user: Curren
     return svc.reply_out(c, None)
 
 
-@router.get("/posts/{post_id}/comments", response_model=Page[CommentOut], responses={404: {"model": ErrorResponse}})
+@router.get(
+    "/posts/{post_id}/comments",
+    response_model=Page[CommentOut],
+    responses={404: {"model": ErrorResponse}},
+    summary="Top-level comments, each with up to N replies (2-level threading)",
+)
 async def list_comments(
     post_id: str, db: DB, user: OptionalUser, pp: Annotated[PageParams, Depends()],
     replies: Annotated[int, Query(ge=0, le=20, description="Max replies returned per top-level comment")] = 3,
