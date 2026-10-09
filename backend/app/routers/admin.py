@@ -10,6 +10,7 @@ from app.models.common import Page, PageParams, to_oid
 from app.models.events import EventDetail, RejectIn
 from app.models.users import RoleChange, UserOut
 from app.services import clubs as clubs_svc
+from app.services import community as community_svc
 from app.services import events as events_svc
 from app.services import users as users_svc
 from app.services.event_view import to_detail
@@ -111,3 +112,14 @@ async def feature_event(event_id: str, db: DB, _: PlatformAdmin) -> EventDetail:
 )
 async def unfeature_event(event_id: str, db: DB, _: PlatformAdmin) -> EventDetail:
     return _ev(await events_svc.set_featured(db, to_oid(event_id, "event id"), False))
+
+
+# ---- community moderation (soft delete via status)
+@router.post("/posts/{post_id}/remove", status_code=204, responses=_errors, summary="Remove any post")
+async def remove_post(post_id: str, db: DB, admin: PlatformAdmin) -> None:
+    await community_svc.remove_post(db, admin, to_oid(post_id, "post id"), admin_override=True)
+
+
+@router.post("/comments/{comment_id}/remove", status_code=204, responses=_errors, summary="Remove any comment")
+async def remove_comment(comment_id: str, db: DB, admin: PlatformAdmin) -> None:
+    await community_svc.remove_comment(db, admin, to_oid(comment_id, "comment id"), admin_override=True)

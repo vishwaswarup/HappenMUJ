@@ -48,4 +48,4 @@ Python 3.12, FastAPI, Pydantic v2, `pymongo.AsyncMongoClient` (NOT Motor), Mongo
 
 ## Milestones
 M0 scaffold ✅ · M1 auth/clubs ✅ · M2 events+GridFS ✅ · M3 discovery/ranking ✅ · M4 saved/calendar/transactions ✅ ·
-M5 community · M6 seed+analytics · M7 docs. Commit after each; summarize at the end of each.
+M5 community ✅ · M6 seed+analytics · M7 docs. Summarize at the end of each. **Do NOT run git commit/add**: M0-M4 were committed by Claude at the user's original instruction; from M5 on the user commits.

@@ -41,3 +41,12 @@
 - `GET /saved-events`: `upcoming=true` is chronological (soonest first); without it, most recent event first. Cancelled events stay in the list with `cancelled: true`. Paginated like other lists.
 - `GET /calendar` groups with `$dateToString` in `Asia/Kolkata`; cancelled saved events appear flagged rather than hidden.
 - Tests use a cheap argon2 hasher (`tests/conftest.py`); production uses library defaults.
+- Community scopes: `global` needs no ref; `event` requires a publicly visible event; `club` requires a verified club (404 otherwise). Any authenticated user can post/comment/react; reads are public.
+- Comment threading is capped at 2 levels: a reply to a reply attaches to the top-level parent. The parent must be an active comment on the same post.
+- `comment_count` and `recent_comments` count/contain ALL active comments (top-level and replies). On removal the count is decremented and `recent_comments` is rebuilt from the last 3 active comments in the same transaction (the maintenance cost of the subset pattern).
+- Removed comments stay in the thread as tombstones (`body: "[removed]"`, author hidden) so replies keep their context, but no longer count. Removed posts 404 for everyone except platform admins (who see `status: removed`). Replies to removed comments are allowed only on active parents (404 otherwise).
+- Soft delete records `removed_by` / `removed_at`. `DELETE /posts|comments/{id}` works for the author or a platform admin; `/admin/.../remove` is platform-admin only. Both are idempotent (204).
+- Reactions: one per user per target (unique index). `PUT /reactions` toggles: same kind removes, different kind switches, none adds. Both `like` and `insightful` are allowed on posts and comments. Counters never go below 0.
+- `GET /posts` order: pinned first, then newest (`_id` as tiebreak). With `q`, text score first. There is no pin endpoint (not in the spec); `pinned` stays false for now.
+- `author_snapshot.name` (posts, comments, `recent_comments`) is NOT refreshed when a user renames themselves: accepted staleness, to be documented as a trade-off (unlike club renames, which are propagated).
+- `GET /posts/{id}/comments?replies=N` (default 3, max 20) returns up to N replies per top-level comment plus the true `reply_count`; more replies than that are not separately paginated yet.
