@@ -7,21 +7,11 @@ from app.models.common import Page
 from app.models.events import EventCard
 
 
-class CategoryFacet(BaseModel):
-    value: str
-    count: int
-
-
-class ClubFacet(BaseModel):
-    id: str
-    name: str
-    slug: str
-    count: int
-
-
 class Facets(BaseModel):
-    categories: list[CategoryFacet]
-    clubs: list[ClubFacet]
+    """Counts by id. Each group's counts ignore that group's own filter (so a selection can be widened)."""
+
+    category: dict[str, int]
+    club: dict[str, int]  # keyed by club id
 
 
 class CataloguePage(Page[EventCard]):
@@ -32,18 +22,21 @@ class EventList(BaseModel):
     items: list[EventCard]
 
 
-class ScoreBreakdown(BaseModel):
-    components: dict[str, float]  # normalised 0..1 inputs
-    contributions: dict[str, float]  # weight * component; they sum to `score`
-
-
 class ScoredEventCard(EventCard):
     score: float
-    score_breakdown: ScoreBreakdown
+    score_breakdown: dict[str, float]  # weighted contribution of each term; the values sum to `score`
+    components: dict[str, float] = {}  # the normalised 0..1 inputs before weighting
+
+
+class RankedWindow(BaseModel):
+    saves: int
+    views: int
+    registration_clicks: int
 
 
 class RankedEventCard(ScoredEventCard):
     rank: int
+    window: RankedWindow  # engagement counted inside the ranking window
 
 
 class TopEventsOut(BaseModel):
@@ -53,13 +46,12 @@ class TopEventsOut(BaseModel):
 
 
 class SuggestedOut(BaseModel):
-    personalized: bool
+    personalised: bool
     items: list[ScoredEventCard]
 
 
-class FeaturedOut(BaseModel):
-    source: Literal["featured", "fallback", "none"]
-    event: EventCard | None
+class FeaturedCard(EventCard):
+    source: Literal["featured", "fallback"]
 
 
 class RankingConfigOut(BaseModel):

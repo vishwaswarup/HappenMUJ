@@ -78,7 +78,7 @@ async def create_comment(post_id: str, data: CommentCreate, db: DB, user: Curren
 )
 async def list_comments(
     post_id: str, db: DB, user: OptionalUser, pp: Annotated[PageParams, Depends()],
-    replies: Annotated[int, Query(ge=0, le=20, description="Max replies returned per top-level comment")] = 3,
+    replies: Annotated[int, Query(ge=0, le=200, description="Max replies returned per top-level comment")] = 100,
 ) -> Page[CommentOut]:  # fmt: skip
     pid = to_oid(post_id, "post id")
     await svc.get_post(db, pid, user)

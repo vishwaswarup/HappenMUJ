@@ -67,7 +67,7 @@ _Generated from the running FastAPI app by `backend/scripts/gen_api_docs.py`; re
 
 | Method | Path | Auth | Query / path params | Summary |
 |---|---|---|---|---|
-| GET | `/home/featured` | optional (extra fields when logged in) | - | Platform-admin featured event (fallback: soonest with poster) |
+| GET | `/home/featured` | optional (extra fields when logged in) | - | Platform-admin featured event as a card, or null (fallback: soonest with poster) |
 | GET | `/home/suggested` | optional (extra fields when logged in) | `limit` | Logged in: rule-based score from interests/categories/clubs. Anonymous: upcoming by popularity |
 | GET | `/home/top-events` | optional (extra fields when logged in) | - | Top 10 events to participate in (windowed engagement) |
 | GET | `/home/top-events/config` | public | - | The ranking weights, in the open |

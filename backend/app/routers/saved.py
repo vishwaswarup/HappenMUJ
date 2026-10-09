@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from app.core import timeutil
 from app.core.deps import DB, CurrentUser
 from app.core.errors import ErrorResponse
-from app.models.common import Page, PageParams, to_oid
+from app.models.common import BigPageParams, Page, to_oid
 from app.models.saved import CalendarOut, SavedEventOut, SavedRecord, SaveIn
 from app.services import saved as svc
 
@@ -46,7 +46,7 @@ async def unsave_event(event_id: str, db: DB, user: CurrentUser) -> None:
 
 @router.get("/saved-events", response_model=Page[SavedEventOut], responses=_errors, summary="My saved events")
 async def list_saved(
-    db: DB, user: CurrentUser, pp: Annotated[PageParams, Depends()], upcoming: bool = False
+    db: DB, user: CurrentUser, pp: Annotated[BigPageParams, Depends()], upcoming: bool = False
 ) -> Page[SavedEventOut]:
     items, total = await svc.list_saved(
         db, user["_id"], timeutil.now(), upcoming=upcoming, skip=pp.skip, limit=pp.page_size

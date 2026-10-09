@@ -22,7 +22,8 @@ Python 3.12, FastAPI, Pydantic v2, `pymongo.AsyncMongoClient` (NOT Motor), Mongo
 - SQL comparison files in docs/sql/ were executed on PostgreSQL 16; if you change them, re-run to verify.
 - Port 8000 is often busy on the dev machine (another project); use `--port 8001`.
 - Pipelines are built by pure functions in `services/discovery.py` (reused for docs/explain).
-- Seed: `python -m app.seed --reset` (~20s; WIPES the configured DB; relative to now; prints sample logins; all seeded passwords `password123`)
+- Seed: `python -m app.seed --reset` (~10s; WIPES the configured DB; relative to now). 16 real MUJ clubs, ~40 events, demo logins `student@` / `acm@` / `admin@muj-demo.edu`, password `demo1234`.
+- Frontend: `happenmuj-frontend/` (Vite+React+TS, the FRONTEND CONTRACT WINS: change the backend to match `src/lib/api/http.ts`/`types.ts`, not the other way). `.env` has `VITE_API_BASE_URL=/api`; the backend serves `/api` (hidden alias) and `/api/v1`. Run both: `make api` + `make web`; verify: `python3 scripts/smoke_test.py http://localhost:8000/api` and `cd happenmuj-frontend && LIVE_API=... npm run test:live`.
 - Config: `backend/.env` (see `.env.example`). Empty `ALLOWED_EMAIL_DOMAINS` = allow any email (dev).
 
 ## Layout

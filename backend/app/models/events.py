@@ -21,32 +21,67 @@ class Strict(BaseModel):
 
 
 # ---------------------------------------------------------------- details (per event_type)
-class Speaker(Strict):
-    name: str = Field(max_length=120)
+# `details` is a free-form sub-document: each event type carries its own keys, unknown keys are kept,
+# and value shapes are deliberately tolerant (the frontend's form is the contract). What IS enforced:
+# the discriminator (one shape per event_type) and a cross-type guard, so a workshop that carries
+# competition-only fields such as `prizes` is still rejected.
+class Lenient(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+# Known keys per type (also what the frontend's eventDetails.ts defines).
+DETAIL_KEYS: dict[str, set[str]] = {
+    "workshop": {"speaker", "topics", "duration_minutes", "prerequisites", "bring_own_laptop"},
+    "competition": {"prizes", "eligibility", "rounds", "judging_criteria"},
+    "hackathon": {"themes", "tracks", "duration_hours", "prizes", "max_teams"},
+    "sports_match": {"sport", "match_type", "teams", "format"},
+    "cultural_show": {"performances", "artists", "auditions_required", "audition_date"},
+    "seminar": {"speaker", "topic", "q_and_a_enabled"},
+    "social": {"extra"},
+    "other": {"extra"},
+}
+
+
+class DetailsBase(Lenient):
+    @model_validator(mode="before")
+    @classmethod
+    def _no_foreign_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            et = data.get("event_type")
+            own = DETAIL_KEYS.get(et, set()) | {"event_type"}
+            others = set().union(*(ks for t, ks in DETAIL_KEYS.items() if t != et))
+            foreign = sorted(k for k in data if k not in own and k in others)
+            if foreign:
+                raise ValueError(f"fields {foreign} do not belong to a '{et}' event")
+        return data
+
+
+class Speaker(Lenient):
+    name: str | None = Field(default=None, max_length=120)
     bio: str | None = Field(default=None, max_length=1000)
     affiliation: str | None = Field(default=None, max_length=200)
 
 
-class Prize(Strict):
-    rank: str | int
-    reward: str
+class Prize(Lenient):
+    rank: str | int | None = None
+    reward: str | None = None
 
 
-class Round(Strict):
-    name: str
-    description: str = ""
+class Round(Lenient):
+    name: str | None = None
+    description: str | None = ""
 
 
-class TeamName(Strict):
-    name: str
+class TeamName(Lenient):
+    name: str | None = None
 
 
-class Performance(Strict):
-    title: str
+class Performance(Lenient):
+    title: str | None = None
     performer: str | None = None
 
 
-class WorkshopDetails(Strict):
+class WorkshopDetails(DetailsBase):
     event_type: Literal["workshop"] = "workshop"
     speaker: Speaker | None = None
     topics: list[str] = []
@@ -55,7 +90,7 @@ class WorkshopDetails(Strict):
     bring_own_laptop: bool = False
 
 
-class CompetitionDetails(Strict):
+class CompetitionDetails(DetailsBase):
     event_type: Literal["competition"] = "competition"
     prizes: list[Prize] = []
     eligibility: str | None = None
@@ -63,16 +98,16 @@ class CompetitionDetails(Strict):
     judging_criteria: list[str] = []
 
 
-class HackathonDetails(Strict):
+class HackathonDetails(DetailsBase):
     event_type: Literal["hackathon"] = "hackathon"
     themes: list[str] = []
     tracks: list[str] = []
     duration_hours: int | None = Field(default=None, gt=0)
-    prizes: list[Prize] = []
+    prizes: list[Prize | str] = []  # the form sends plain lines
     max_teams: int | None = Field(default=None, gt=0)
 
 
-class SportsMatchDetails(Strict):
+class SportsMatchDetails(DetailsBase):
     event_type: Literal["sports_match"] = "sports_match"
     sport: str | None = None
     match_type: str | None = None
@@ -80,27 +115,27 @@ class SportsMatchDetails(Strict):
     format: str | None = None
 
 
-class CulturalShowDetails(Strict):
+class CulturalShowDetails(DetailsBase):
     event_type: Literal["cultural_show"] = "cultural_show"
     performances: list[Performance] = []
     artists: list[str] = []
     auditions_required: bool = False
-    audition_date: UTCDateTime | None = None
+    audition_date: str | None = None  # 'YYYY-MM-DD' from a date input; kept as entered
 
 
-class SeminarDetails(Strict):
+class SeminarDetails(DetailsBase):
     event_type: Literal["seminar"] = "seminar"
     speaker: Speaker | None = None
     topic: str | None = None
     q_and_a_enabled: bool = False
 
 
-class SocialDetails(Strict):
+class SocialDetails(DetailsBase):
     event_type: Literal["social"] = "social"
     extra: dict[str, Any] = {}
 
 
-class OtherDetails(Strict):
+class OtherDetails(DetailsBase):
     event_type: Literal["other"] = "other"
     extra: dict[str, Any] = {}
 
@@ -288,6 +323,7 @@ class EventPatch(Strict):
     """Partial update. Embedded groups (schedule, venue, fee, team, registration, contact, details)
     are replaced as a whole when present; the merged result is re-validated."""
 
+    club_id: str | None = None  # the form re-sends it; changing the club of an event is refused
     title: str | None = None
     one_liner: str | None = None
     description: str | None = None
@@ -386,6 +422,7 @@ class EventCard(BaseModel):
     registration: RegistrationCard
     registration_open: bool
     featured: bool
+    status: EventStatus
     stats: StatsCard
     is_saved: bool | None = None  # only present when the caller is authenticated
 
@@ -403,7 +440,6 @@ class EventDetail(EventCard):
     venue: VenueDetail
     registration: RegistrationDetail
     stats: StatsDetail
-    status: str
     cancelled: bool
     completed: bool  # derived: end < now (never stored)
     rejection_reason: str | None

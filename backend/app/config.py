@@ -13,10 +13,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24
     # Comma-separated. Empty means "allow any email" (development).
     allowed_email_domains: str = ""
-    platform_admin_email: str = "admin@jaipur.manipal.edu"
-    platform_admin_password: str = "admin12345"
+    platform_admin_email: str = "admin@muj-demo.edu"
+    platform_admin_password: str = "demo1234"
     app_timezone: str = "Asia/Kolkata"
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:5173"
 
     @field_validator("allowed_email_domains", "cors_origins", mode="before")
     @classmethod

@@ -1,10 +1,14 @@
 """Demo data: ``python -m app.seed --reset``  (run from backend/).
 
-Deterministic (random seed 42) and *relative to now*, so every homepage section is populated whenever
-it runs. Clubs, events, saves, comments and reactions go through the real service functions, so they
-obey the same validation and keep the same counters as live traffic. Bulk views/clicks are inserted
-directly together with the matching ``$inc`` on ``events.stats`` (same documents the API would write).
-All sample people, clubs and events are fictional.
+Deterministic (random seed 42) and *relative to now*, so every homepage section is populated whenever it
+runs. Clubs, events, saves, comments and reactions go through the real service functions, so they obey the
+same validation and keep the same counters as live traffic. Bulk views/clicks are inserted directly together
+with the matching ``$inc`` on ``events.stats`` (the same documents the API would write).
+
+The 16 clubs are the real MUJ clubs (names and categories as supplied; descriptions are generic one-liners).
+People, events, posts and comments are fictional sample content.
+
+Demo logins (password ``demo1234``): student@muj-demo.edu, acm@muj-demo.edu (club admin), admin@muj-demo.edu.
 """
 
 import argparse
@@ -22,7 +26,6 @@ from pymongo import UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app import db as db_module
-from app.config import get_settings
 from app.core import timeutil
 from app.core.security import hash_password
 from app.main import prepare_database
@@ -37,89 +40,95 @@ from app.services import saved as saved_svc
 from app.validators import CATEGORIES
 
 SEED = 42
-PASSWORD = "password123"
-N_STUDENTS = 40
-N_SAVES = 400
-N_VIEWS = 2350
-N_CLICKS = 250  # 400 saves + 2350 views + 250 clicks = 3000 interactions
-N_POSTS, N_COMMENTS, N_REACTIONS = 20, 120, 300
+PASSWORD = "demo1234"
+DOMAIN = "muj-demo.edu"
+DEMO_STUDENT = f"student@{DOMAIN}"
+DEMO_ADMIN = f"admin@{DOMAIN}"
+N_STUDENTS = 25  # the demo student + 24 more, so ranking, suggestions and analytics have something to chew on
+N_SAVES = 180
+N_VIEWS = 1300
+N_CLICKS = 120  # 180 saves + 1300 views + 120 clicks = 1600 interactions over the last 14 days
+N_POSTS, N_COMMENTS, N_REACTIONS = 12, 50, 100
 POSTER_SHARE = 0.7
 
-# name, category, description, verified
+# name, category, one-line description. Names and categories as supplied; all verified.
 CLUBS = [
-    ("ACM", "technical", "Computing and AI community: talks, workshops and coding contests.", True),
-    ("IEEE", "technical", "Electronics, hardware and engineering student chapter.", True),
-    ("LITMUS", "debating", "Literature, debating and public speaking society.", True),
-    ("TMC", "social", "General-interest student club for meetups and socials.", True),
-    ("AURA", "cultural", "Music, dance and the annual cultural fest.", True),
-    ("E-Cell", "career", "Entrepreneurship cell: startups, pitching and careers.", True),
-    ("Sports Committee", "sports", "Inter-department leagues and campus sports.", True),
-    ("AWS Cloud Club", "technical", "Cloud computing community.", True),
-    ("Robotix", "technical", "Robotics and embedded systems club.", True),
-    ("Lens Photography Club", "cultural", "Photography walks, contests and exhibitions.", True),
-    ("Game Guild", "gaming", "Esports and tabletop gaming (awaiting verification).", False),
-    ("Dance Club", "cultural", "Street and fusion dance crew (awaiting verification).", False),
+    ("ACM", "technical", "Student chapter of the Association for Computing Machinery: computing talks, workshops and coding contests."),
+    ("IEEE SB", "technical", "IEEE Student Branch: engineering and technology events for the whole campus."),
+    ("IEEE CS", "technical", "IEEE Computer Society student chapter: software, AI and computing events."),
+    ("IEEE WIE", "technical", "IEEE Women in Engineering affinity group: events that support women in technology."),
+    ("LITMUS", "debating", "The literary and debating society: debates, quizzes and public speaking."),
+    ("RANDOMIZE", "technical", "Student technical club (description to be confirmed by the club)."),
+    ("GARUDA", "technical", "Student technical club (description to be confirmed by the club)."),
+    ("DE ARTISTRY CLUB", "cultural", "Art and design club: sketching, painting and exhibitions."),
+    ("THE MUSICAL CLUB (TMC)", "cultural", "Music club: open mics, band nights and jam sessions."),
+    ("CHOREOGRAPHIA", "cultural", "Dance club: performances, workshops and showcases."),
+    ("ROTARACT", "social", "Community service club: drives, camps and volunteering."),
+    ("OMPHALOS", "cultural", "Student cultural club (description to be confirmed by the club)."),
+    ("CINEPHILIA", "cultural", "Film club: screenings and discussions."),
+    ("MARKSOC", "career", "Marketing society: case studies, branding and campaigns."),
+    ("MANAGIA", "career", "Management club: business competitions, talks and workshops."),
+    ("GLITCH", "gaming", "Gaming club: esports tournaments, game jams and board-game nights."),
 ]  # fmt: skip
 
-# title, one_liner, club, category, event_type, tags
+# title, one_liner, club, category, event_type, tags, slot
+# slots: today / tomorrow / week (days 2-6) / later (days 8-28) / past (1-13 days ago) /
+#        cancelled / pending (pending_review) / draft / rejected
 E = [
-    ("Intro to Generative AI", "Build a small LLM app hands-on in one evening.", "ACM", "technical", "workshop", ["AI", "GenAI", "LLM"]),
-    ("Cloud 101: Deploying on AWS", "Launch your first app on the cloud, start to finish.", "AWS Cloud Club", "technical", "workshop", ["AWS", "Cloud", "DevOps"]),
-    ("Arduino Basics Bootcamp", "Blink, sense, move: your first embedded projects.", "Robotix", "workshop", "workshop", ["Arduino", "Robotics", "Electronics"]),
-    ("Portrait Photography Masterclass", "Light, lenses and posing for striking portraits.", "Lens Photography Club", "workshop", "workshop", ["Photography", "Portrait"]),
-    ("Resume Building Workshop", "Craft a one-page resume recruiters actually read.", "E-Cell", "career", "workshop", ["Resume", "Careers"]),
-    ("Git & GitHub for Beginners", "Version control and open-source contribution basics.", "ACM", "technical", "workshop", ["Git", "OpenSource"]),
-    ("PCB Design with KiCad", "From schematic to a manufacturable board.", "IEEE", "technical", "workshop", ["PCB", "Hardware", "Electronics"]),
-    ("Public Speaking Essentials", "Overcome stage fright and structure a talk.", "LITMUS", "debating", "workshop", ["Public Speaking", "Communication"]),
-    ("Pitch Deck Clinic", "Get live feedback on your startup pitch.", "E-Cell", "career", "workshop", ["Startup", "Pitch"]),
-    ("Machine Learning with Python", "Train, evaluate and ship a first ML model.", "ACM", "academic", "workshop", ["ML", "Python", "AI"]),
-    ("CodeSprint 2.0", "Solve algorithmic problems against the clock.", "ACM", "competition", "competition", ["Competitive Programming", "DSA"]),
-    ("Inter-Branch Quiz League", "Teams from every branch battle in a multi-round quiz.", "LITMUS", "competition", "competition", ["Quiz", "Trivia"]),
-    ("Robo Race", "Line-following robots race for the podium.", "Robotix", "competition", "competition", ["Robotics", "Line Follower"]),
-    ("Capture the Campus", "Photo contest: show us MUJ like you've never seen it.", "Lens Photography Club", "competition", "competition", ["Photography", "Contest"]),
-    ("Parliamentary Debate Championship", "Format-driven debating with seasoned adjudicators.", "LITMUS", "debating", "competition", ["Debate", "MUN"]),
-    ("Business Plan Battle", "Pitch a venture to a panel of founders.", "E-Cell", "competition", "competition", ["Startup", "Entrepreneurship"]),
-    ("Valorant Campus Cup", "5v5 esports bracket with a live caster.", "TMC", "gaming", "competition", ["Valorant", "Esports"]),
-    ("Open Mic Showdown", "Sing, rap, recite: the stage is yours.", "AURA", "cultural", "competition", ["Music", "Open Mic"]),
-    ("HackMUJ 24h", "Build something real in 24 hours.", "ACM", "hackathon", "hackathon", ["Hackathon", "Web", "AI"]),
-    ("Cloud Innovate Hackathon", "Serverless ideas that scale.", "AWS Cloud Club", "hackathon", "hackathon", ["AWS", "Cloud", "Serverless"]),
-    ("IEEE HardwareHack", "Hardware-first hackathon with IoT kits provided.", "IEEE", "hackathon", "hackathon", ["IoT", "Hardware"]),
-    ("Climate Tech Sprint", "Prototype for a greener campus and city.", "E-Cell", "hackathon", "hackathon", ["Climate", "Sustainability"]),
-    ("Game Jam Weekend", "Make a playable game around a surprise theme.", "TMC", "gaming", "hackathon", ["Game Dev", "Unity"]),
-    ("Inter-Department Football League", "Round-robin league across departments.", "Sports Committee", "sports", "sports_match", ["Football"]),
-    ("Basketball Friendly: CSE vs ECE", "A friendly with bragging rights.", "Sports Committee", "sports", "sports_match", ["Basketball"]),
-    ("Cricket Premier League Finals", "The season finale under the lights.", "Sports Committee", "sports", "sports_match", ["Cricket"]),
-    ("Badminton Doubles Open", "Open doubles bracket, all skill levels.", "Sports Committee", "sports", "sports_match", ["Badminton"]),
-    ("Table Tennis Knockout", "Single-elimination, best of five.", "Sports Committee", "sports", "sports_match", ["Table Tennis"]),
-    ("Chess Rapid Tournament", "Swiss-system rapid chess.", "Sports Committee", "sports", "sports_match", ["Chess"]),
-    ("AURA Night 2026", "The flagship night of music and dance.", "AURA", "cultural", "cultural_show", ["Music", "Dance", "Fest"]),
-    ("Classical Evening", "An evening of Hindustani and Carnatic classical.", "AURA", "cultural", "cultural_show", ["Classical", "Music"]),
-    ("Street Play Festival", "Nukkad natak performances on social themes.", "LITMUS", "cultural", "cultural_show", ["Theatre", "Street Play"]),
-    ("Fusion Dance Showcase", "Contemporary meets folk.", "AURA", "cultural", "cultural_show", ["Dance"]),
-    ("Stand-up Comedy Night", "Student comics take the mic.", "TMC", "cultural", "cultural_show", ["Comedy"]),
-    ("Battle of Bands", "Campus bands compete live.", "AURA", "cultural", "cultural_show", ["Bands", "Rock"]),
-    ("Future of Quantum Computing", "Where qubits are heading, from lab to industry.", "IEEE", "seminar", "seminar", ["Quantum", "Physics"]),
-    ("Careers in Cloud: Industry Talk", "Roles, skills and paths in cloud engineering.", "AWS Cloud Club", "career", "seminar", ["Cloud", "Careers"]),
-    ("Women in Tech Panel", "Panel on building a career in technology.", "ACM", "seminar", "seminar", ["Diversity", "Careers"]),
-    ("From Campus to Startup", "Founders share how they made the jump.", "E-Cell", "seminar", "seminar", ["Startup"]),
-    ("AI Ethics and Society", "Bias, privacy and accountability in AI.", "ACM", "academic", "seminar", ["AI", "Ethics"]),
-    ("5G and the Next-gen Networks", "What 5G changes, and what 6G might.", "IEEE", "seminar", "seminar", ["5G", "Networks"]),
-    ("Research Paper Writing Seminar", "Structure, citations and getting published.", "IEEE", "academic", "seminar", ["Research", "Writing"]),
-    ("Placement Prep: Aptitude Strategies", "Speed and accuracy for aptitude rounds.", "E-Cell", "career", "seminar", ["Placements", "Aptitude"]),
-    ("Freshers' Meetup", "Meet your seniors and find your club.", "TMC", "social", "social", ["Freshers", "Networking"]),
-    ("Board Games Evening", "Catan, Codenames and chai.", "TMC", "gaming", "social", ["Board Games"]),
-    ("Photo Walk: Old Jaipur", "A morning walk with cameras through the old city.", "Lens Photography Club", "social", "social", ["Photo Walk", "Jaipur"]),
-    ("Alumni Interaction Evening", "Chat with alumni about life after MUJ.", "E-Cell", "social", "social", ["Alumni", "Networking"]),
-    ("Cleanliness Drive", "Volunteer to clean up the campus perimeter.", "TMC", "social", "social", ["Volunteering"]),
-    ("Movie Night: Sci-Fi Special", "Open-air screening and popcorn.", "ACM", "social", "social", ["Movies", "SciFi"]),
-    ("Blood Donation Camp", "Donate blood with the city hospital's team.", "TMC", "other", "other", ["Donation", "Health"]),
-    ("Open House: Club Fair", "Every club at one place, one afternoon.", "E-Cell", "other", "other", ["Clubs", "Fair"]),
-    ("Tech Exhibition 2026", "Student projects on display.", "IEEE", "other", "other", ["Exhibition", "Projects"]),
-    ("Book Swap Day", "Bring one, take one.", "LITMUS", "other", "other", ["Books", "Swap"]),
-    ("Charity Run 5K", "A 5K run for a good cause.", "Sports Committee", "other", "other", ["Charity", "Running"]),
-    ("Orientation: Library Resources", "Journals, databases and how to use them.", "LITMUS", "academic", "other", ["Library", "Research"]),
+    ("Intro to Generative AI", "Build a small LLM app hands-on in one evening.", "ACM", "technical", "workshop", ["AI", "GenAI", "LLM"], "tomorrow"),
+    ("CodeSprint 2.0", "Solve algorithmic problems against the clock.", "ACM", "competition", "competition", ["Competitive Programming", "DSA"], "week"),
+    ("HackMUJ 24h", "Build something real in 24 hours.", "ACM", "hackathon", "hackathon", ["Hackathon", "Web", "AI"], "later"),
+    ("Git & GitHub for Beginners", "Version control and open-source contribution basics.", "ACM", "technical", "workshop", ["Git", "OpenSource"], "past"),
+    ("Linux Install Fest", "Bring your laptop and leave with a dual-boot setup.", "ACM", "technical", "workshop", ["Linux", "OpenSource"], "draft"),
+    ("PCB Design with KiCad", "From schematic to a manufacturable board.", "IEEE SB", "technical", "workshop", ["PCB", "Hardware", "Electronics"], "week"),
+    ("IEEE HardwareHack", "Hardware-first hackathon with IoT kits provided.", "IEEE SB", "hackathon", "hackathon", ["IoT", "Hardware"], "pending"),
+    ("Tech Exhibition 2026", "Student projects on display.", "IEEE SB", "technical", "other", ["Exhibition", "Projects"], "later"),
+    ("5G and the Next-gen Networks", "What 5G changes, and what 6G might.", "IEEE SB", "seminar", "seminar", ["5G", "Networks"], "rejected"),
+    ("Machine Learning with Python", "Train, evaluate and ship a first ML model.", "IEEE CS", "academic", "workshop", ["ML", "Python", "AI"], "week"),
+    ("AI Ethics and Society", "Bias, privacy and accountability in AI.", "IEEE CS", "academic", "seminar", ["AI", "Ethics"], "pending"),
+    ("Women in Tech Panel", "Panel on building a career in technology.", "IEEE WIE", "seminar", "seminar", ["Diversity", "Careers"], "tomorrow"),
+    ("Resume & LinkedIn Clinic", "Craft a resume recruiters actually read.", "IEEE WIE", "career", "workshop", ["Resume", "Careers"], "week"),
+    ("Parliamentary Debate Championship", "Format-driven debating with seasoned adjudicators.", "LITMUS", "debating", "competition", ["Debate", "MUN"], "later"),
+    ("Public Speaking Essentials", "Overcome stage fright and structure a talk.", "LITMUS", "debating", "workshop", ["Public Speaking", "Communication"], "tomorrow"),
+    ("Inter-Branch Quiz League", "Teams from every branch battle in a multi-round quiz.", "LITMUS", "competition", "competition", ["Quiz", "Trivia"], "week"),
+    ("Competitive Programming Bootcamp", "Patterns, practice and mock contests.", "RANDOMIZE", "technical", "workshop", ["DSA", "Competitive Programming"], "week"),
+    ("Capture the Flag: Beginner Edition", "Your first security CTF, with hints on tap.", "RANDOMIZE", "technical", "competition", ["Security", "CTF"], "cancelled"),
+    ("Drone Flight Basics", "Hands-on introduction to flying and building drones.", "GARUDA", "technical", "workshop", ["Drones", "Robotics"], "later"),
+    ("Aero Design Challenge", "Design, build and fly a glider.", "GARUDA", "competition", "competition", ["Aero", "Design"], "past"),
+    ("Live Sketching Jam", "Sketch live models and campus scenes together.", "DE ARTISTRY CLUB", "cultural", "other", ["Art", "Sketching"], "week"),
+    ("Mural Painting Day", "Paint a wall of the campus together.", "DE ARTISTRY CLUB", "cultural", "other", ["Art", "Mural"], "cancelled"),
+    ("Open Mic Night", "Sing, rap, recite: the stage is yours.", "THE MUSICAL CLUB (TMC)", "cultural", "cultural_show", ["Music", "Open Mic"], "tomorrow"),
+    ("Battle of Bands", "Campus bands compete live.", "THE MUSICAL CLUB (TMC)", "cultural", "cultural_show", ["Bands", "Rock"], "later"),
+    ("Unplugged Evening", "An acoustic evening under the stars.", "THE MUSICAL CLUB (TMC)", "cultural", "cultural_show", ["Music", "Acoustic"], "past"),
+    ("Fusion Dance Showcase", "Contemporary meets folk.", "CHOREOGRAPHIA", "cultural", "cultural_show", ["Dance"], "week"),
+    ("Salsa Workshop for Beginners", "No partner needed: learn your first steps.", "CHOREOGRAPHIA", "workshop", "workshop", ["Dance", "Salsa"], "today"),
+    ("Blood Donation Camp", "Donate blood with the city hospital's team.", "ROTARACT", "social", "other", ["Donation", "Health"], "week"),
+    ("Cleanliness Drive", "Volunteer to clean up the campus perimeter.", "ROTARACT", "social", "social", ["Volunteering"], "cancelled"),
+    ("Cultural Fest Kickoff", "Announcing the line-up and opening the stalls.", "OMPHALOS", "cultural", "cultural_show", ["Fest", "Cultural"], "later"),
+    ("Street Play Festival", "Nukkad natak performances on social themes.", "OMPHALOS", "cultural", "cultural_show", ["Theatre", "Street Play"], "week"),
+    ("Short Film Screening & Discussion", "Watch student shorts and talk to the makers.", "CINEPHILIA", "cultural", "social", ["Film", "Shorts"], "tomorrow"),
+    ("Sci-Fi Movie Night", "Open-air screening and popcorn.", "CINEPHILIA", "social", "social", ["Movies", "SciFi"], "past"),
+    ("Marketing Case Study Contest", "Crack a real brand's growth problem in teams.", "MARKSOC", "career", "competition", ["Marketing", "Case Study"], "week"),
+    ("Branding 101", "How brands are built, with examples.", "MARKSOC", "career", "seminar", ["Branding", "Marketing"], "pending"),
+    ("Business Plan Battle", "Pitch a venture to a panel of founders.", "MANAGIA", "competition", "competition", ["Startup", "Entrepreneurship"], "pending"),
+    ("Startup Founders Talk", "Founders share how they made the jump.", "MANAGIA", "career", "seminar", ["Startup", "Founders"], "today"),
+    ("Valorant Campus Cup", "5v5 esports bracket with a live caster.", "GLITCH", "gaming", "competition", ["Valorant", "Esports"], "later"),
+    ("Game Jam Weekend", "Make a playable game around a surprise theme.", "GLITCH", "gaming", "hackathon", ["Game Dev", "Unity"], "later"),
+    ("Board Games Evening", "Catan, Codenames and chai.", "GLITCH", "gaming", "social", ["Board Games"], "past"),
 ]  # fmt: skip
-assert len(E) == 55
+assert len(E) == 40 and {r[2] for r in E} == {c[0] for c in CLUBS}, "every club has at least one event"
+
+# The demo student saves these two on purpose: their times overlap, so the calendar's overlap warning shows.
+OVERLAP = {"Intro to Generative AI": (15, 0, 2.5), "Open Mic Night": (16, 30, 2.0)}  # tomorrow IST: hour, minute, hours
+FEATURED_TITLE = "HackMUJ 24h"
+DEMO_SAVES = [
+    "Intro to Generative AI",
+    "Open Mic Night",
+    "Women in Tech Panel",
+    FEATURED_TITLE,
+    "Salsa Workshop for Beginners",
+    "Unplugged Evening",
+]
 
 FIRST = ["Aarav", "Diya", "Vivaan", "Ananya", "Kabir", "Ishita", "Reyansh", "Meera", "Arjun", "Saanvi", "Rohan", "Kavya",
          "Aditya", "Tanvi", "Karan", "Nisha", "Yash", "Riya", "Dev", "Pooja"]  # fmt: skip
@@ -130,14 +139,10 @@ INTERESTS = ["ai", "machine learning", "robotics", "web development", "cloud", "
 SPEAKERS = [("Dr. Meera Iyer", "IIT Delhi"), ("Prof. Arvind Rao", "IISc Bangalore"), ("Neha Kulkarni", "Google"),
             ("Rahul Menon", "AWS"), ("Dr. Sunita Joshi", "MUJ Faculty"), ("Vikram Sethi", "Founder, an EdTech startup")]  # fmt: skip
 POST_TITLES = [
-    "Looking for teammates for the next hackathon", "Best resources to learn system design?",
-    "Which club should a first-year join?", "Anyone up for a weekend football match?",
-    "Lost: blue water bottle near AB3", "Tips for placement season", "Laptop recommendations under 60k?",
-    "Share your best campus photos", "Study group for Data Structures", "Open source contribution ideas",
-    "Cafeteria feedback thread", "Which sessions are you excited about?", "Need a drummer for Battle of Bands",
-    "How do you balance clubs and academics?", "Any good internship leads?", "Carpool to the city this weekend?",
-    "Book recommendations for the break", "Is anyone attending the workshop?", "Ideas for the next club event",
-    "Roast my resume (be kind)",
+    "Looking for teammates for HackMUJ", "Best resources to learn system design?", "Which club should a first-year join?",
+    "Anyone up for a weekend football match?", "Lost: blue water bottle near AB3", "Tips for placement season",
+    "Who is coming to the Open Mic?", "Share your best campus photos", "Study group for Data Structures",
+    "Need a drummer for Battle of Bands", "How do you balance clubs and academics?", "Is anyone attending the workshop?",
 ]  # fmt: skip
 POST_BODIES = [
     "Would love to hear what has worked for you all. Drop your experiences below.",
@@ -154,15 +159,6 @@ COMMENTS = [
     "I would add: start early and ask seniors.", "+1, I was about to ask the same thing.",
     "Which venue is this at?", "Good point, hadn't thought of it that way.",
 ]  # fmt: skip
-
-
-class Stats:
-    def __init__(self) -> None:
-        self.rows: dict[str, Any] = {}
-
-
-def slugify_email(first: str, last: str, n: int, domain: str) -> str:
-    return f"{first}.{last}{n}@{domain}".lower()
 
 
 def make_poster(title: str, club: str, rng: random.Random) -> bytes:
@@ -254,7 +250,6 @@ REG_PLATFORM = {"hackathon": ["devfolio", "unstop"], "competition": ["unstop", "
 async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
     random.seed(SEED)
     rng = random.Random(SEED)
-    domain = (get_settings().email_domains or ["jaipur.manipal.edu"])[0]
 
     if reset:
         await db.client.drop_database(db.name)  # also drops GridFS (fs.files / fs.chunks)
@@ -265,84 +260,99 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
     now = timeutil.now()
     pw_hash = hash_password(PASSWORD)  # one hash for every seeded user keeps seeding fast
 
-    async def add_user(name: str, email: str, **extra: Any) -> dict:
-        doc = {"name": name, "email": email, "password_hash": pw_hash, "role": "student", "interests": [],
+    async def add_user(name: str, email: str, role: str = "student", **extra: Any) -> dict:
+        doc = {"name": name, "email": email, "password_hash": pw_hash, "role": role, "interests": [],
                "preferred_categories": [], "followed_club_ids": [], "created_at": now - timedelta(days=rng.randint(5, 60)),
                "schema_v": SCHEMA_VERSION, **extra}  # fmt: skip
         doc["_id"] = (await db.users.insert_one(doc)).inserted_id
         return doc
 
-    admin = await db.users.find_one({"role": "platform_admin"})
+    # The platform admin. If .env already bootstrapped this email, reuse it and set the demo password.
+    await db.users.update_one(
+        {"email": DEMO_ADMIN},
+        {"$set": {"role": "platform_admin", "password_hash": pw_hash, "name": "Platform Admin"},
+         "$setOnInsert": {"interests": [], "preferred_categories": [], "followed_club_ids": [], "created_at": now, "schema_v": SCHEMA_VERSION}},
+        upsert=True,
+    )  # fmt: skip
+    admin = await db.users.find_one({"email": DEMO_ADMIN})
 
-    # ---------------------------------------------------------------- students
-    students: list[dict] = []
-    for i in range(N_STUDENTS):
+    # ---------------------------------------------------------------- students (the demo student first)
+    students: list[dict] = [
+        await add_user("Demo Student", DEMO_STUDENT, interests=["ai", "robotics", "music", "gaming"],
+                       preferred_categories=["technical", "hackathon", "cultural"])
+    ]  # fmt: skip
+    for i in range(1, N_STUDENTS):
         first, last = FIRST[i % len(FIRST)], LAST[(i * 3) % len(LAST)]
         students.append(await add_user(
-            f"{first} {last}", slugify_email(first, last, i + 1, domain),
+            f"{first} {last}", f"{first}.{last}{i}@{DOMAIN}".lower(),
             interests=normalize_terms(rng.sample(INTERESTS, rng.randint(2, 5))),
             preferred_categories=rng.sample(CATEGORIES[:9], rng.randint(1, 3)),
         ))  # fmt: skip
 
-    # ---------------------------------------------------------------- clubs + admins (through the services)
+    # ---------------------------------------------------------------- the 16 real clubs, all verified, one admin each
     club_docs: dict[str, dict] = {}
-    club_admins: dict[str, list[dict]] = {}
-    for idx, (name, cat, desc, verified) in enumerate(CLUBS):
-        requester = students[idx]
-        club = await clubs_svc.request_club(db, requester["_id"], ClubCreate(name=name, description=desc, category=cat))
-        if verified:
-            await clubs_svc.verify_club(db, club["_id"], admin["_id"])
-            club_admins[name] = []
-            for k in range(rng.choice([1, 2])):
-                slug = club["slug"].replace("-", "")
-                u = await add_user(f"{name} Admin {k + 1}", f"admin.{slug}{k + 1}@{domain}")
-                await clubs_svc.add_admin(db, club["_id"], u["_id"])
-                club_admins[name].append(await db.users.find_one({"_id": u["_id"]}))
+    club_admin: dict[str, dict] = {}
+    for idx, (name, cat, desc) in enumerate(CLUBS):
+        club = await clubs_svc.request_club(
+            db, students[idx + 1]["_id"], ClubCreate(name=name, description=desc, category=cat)
+        )
+        await clubs_svc.verify_club(db, club["_id"], admin["_id"])
+        u = await add_user(f"{name.title()} Admin", f"{club['slug']}@{DOMAIN}")
+        await clubs_svc.add_admin(db, club["_id"], u["_id"])
+        club_admin[name] = await db.users.find_one({"_id": u["_id"]})  # re-read: role is now club_admin
         club_docs[name] = await db.clubs.find_one({"_id": club["_id"]})
-    verified_ids = [club_docs[c[0]]["_id"] for c in CLUBS if c[3]]
-    for s in students:  # follows
-        pick = rng.sample(verified_ids, rng.randint(0, 3))
+    club_ids = [c["_id"] for c in club_docs.values()]
+    for s in students:  # follows: the demo student follows ACM, IEEE SB and GLITCH
+        pick = (
+            [club_docs[n]["_id"] for n in ("ACM", "IEEE SB", "GLITCH")] if s["email"] == DEMO_STUDENT
+            else rng.sample(club_ids, rng.randint(0, 3))
+        )  # fmt: skip
         await db.users.update_one({"_id": s["_id"]}, {"$set": {"followed_club_ids": pick}})
         s["followed_club_ids"] = pick
 
     # ---------------------------------------------------------------- events (through the services)
-    slots = (["today"] * 3 + ["tomorrow"] * 5 + ["week"] * 12 + ["later"] * 17 + ["past"] * 8
-             + ["cancelled"] * 2 + ["pending"] * 3 + ["draft"] * 3 + ["rejected"] * 2)  # fmt: skip
-    rng.shuffle(slots)
-    not_specified = set(rng.sample(range(len(E)), 8))
+    not_specified = set(rng.sample(range(len(E)), 5))  # a few events leave fee and team unstated
     today_ist = timeutil.ist_date(now)
 
-    def ist_at(days: int, hour_min: tuple[int, int] = (9, 19)):
+    def ist_at(days: int, hour: int, minute: int = 0):
         start, _ = timeutil.ist_day_range(today_ist + timedelta(days=days))
-        return start + timedelta(hours=rng.randint(*hour_min), minutes=rng.choice([0, 15, 30, 45]))
+        return start + timedelta(hours=hour, minutes=minute)
 
-    def start_for(slot: str):
+    def start_for(title: str, slot: str):
         if slot == "today":
-            return now + timedelta(minutes=rng.randint(45, 300))
+            return now + timedelta(minutes=rng.randint(60, 240))
         if slot == "tomorrow":
-            return ist_at(1)
+            if title in OVERLAP:
+                h, m, _ = OVERLAP[title]
+                return ist_at(1, h, m)
+            return ist_at(1, rng.randint(9, 19), rng.choice([0, 30]))
         if slot == "week":
-            return ist_at(rng.randint(2, 6))
+            return ist_at(rng.randint(2, 6), rng.randint(9, 19), rng.choice([0, 15, 30, 45]))
         if slot == "past":
             return now - timedelta(days=rng.randint(1, 13), hours=rng.randint(1, 8))
-        if slot in ("later",):
-            return ist_at(rng.randint(8, 28))
-        return ist_at(rng.randint(3, 25))  # cancelled / pending / draft / rejected: upcoming
+        if slot == "later":
+            return ist_at(rng.randint(8, 28), rng.randint(9, 19), rng.choice([0, 15, 30, 45]))
+        return ist_at(
+            rng.randint(3, 25), rng.randint(9, 19), rng.choice([0, 30])
+        )  # cancelled / pending / draft / rejected
 
     events: list[dict] = []
-    closed_left = 4
+    closed_left = 3  # a few upcoming events whose registration deadline has already passed
     pngs = 0
-    for i, ((title, liner, club_name, cat, etype, tags), slot) in enumerate(zip(E, slots, strict=True)):
-        start = start_for(slot)
-        lo, hi = DURATION_H[etype]
-        end = start + timedelta(hours=rng.randint(lo, hi), minutes=rng.choice([0, 30]))
+    for i, (title, liner, club_name, cat, etype, tags, slot) in enumerate(E):
+        start = start_for(title, slot)
+        if title in OVERLAP:
+            end = start + timedelta(hours=OVERLAP[title][2])
+        else:
+            lo, hi = DURATION_H[etype]
+            end = start + timedelta(hours=rng.randint(lo, hi), minutes=rng.choice([0, 30]))
         required = rng.random() < (0.9 if etype in ("workshop", "competition", "hackathon", "seminar") else 0.35)
         reg: dict[str, Any] = {"required": required}
         deadline = None
         if required:
             plat = rng.choice(REG_PLATFORM.get(etype, ["google_forms", "website"]))
             reg.update(platform=plat, url=f"https://forms.example.com/{plat}/{i + 1}")
-            if slot in ("week", "later") and closed_left:
+            if slot in ("week", "later") and closed_left and title != FEATURED_TITLE:
                 deadline, closed_left = now - timedelta(days=1), closed_left - 1  # registration already closed
             elif slot in ("today", "tomorrow", "week") and rng.random() < 0.5:
                 d = min(now + timedelta(hours=rng.randint(6, 60)), start - timedelta(minutes=30))
@@ -350,7 +360,6 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
             elif rng.random() < 0.6:
                 d = start - timedelta(days=1)
                 deadline = d if d > now else None
-        reg["deadline"] = deadline
         fee, team = fee_for(etype, rng), team_for(etype, rng)
         if i in not_specified:
             fee, team = {"type": "not_specified"}, {"type": "not_specified"}
@@ -365,10 +374,10 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
                                  {"name": "Library Lawns"}, {"name": "AB2 Lab 204", "building": "AB2", "room": "204"}]),
             "fee": fee, "team": team,
             "registration": {**reg, "deadline": None if slot == "past" else (deadline.isoformat() if deadline else None)},
-            "contact": {"name": rng.choice(FIRST), "email": f"contact.{club_docs[club_name]['slug']}@{domain}"},
+            "contact": {"name": rng.choice(FIRST), "email": f"{club_docs[club_name]['slug']}@{DOMAIN}"},
             "details": details_for(etype, title, tags, rng),
         }  # fmt: skip
-        owner = rng.choice(club_admins[club_name])
+        owner = club_admin[club_name]
         ev = await events_svc.create_event(db, owner, EventCreate.model_validate(payload))
         eid = ev["_id"]
         if slot != "draft":
@@ -388,19 +397,14 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
             pngs += 1
         events.append({"id": eid, "slot": slot, "title": title, "start": start, "etype": etype, "owner": owner})
 
-    upcoming = [e for e in events if e["slot"] in ("today", "tomorrow", "week", "later")]
-    for e in rng.sample([x for x in upcoming if x["slot"] in ("today", "week", "later")], 3):
-        await events_svc.set_featured(db, e["id"], True)
+    by_title = {e["title"]: e for e in events}
+    await events_svc.set_featured(db, by_title[FEATURED_TITLE]["id"], True)  # exactly one featured event
 
     # ---------------------------------------------------------------- engagement
     public = [e for e in events if e["slot"] in ("today", "tomorrow", "week", "later", "past")]
-    weights = [
-        (0.3 if e["slot"] == "past" else 1.0) / (rank + 1) ** 0.8
-        for rank, e in enumerate(rng.sample(public, len(public)))
-    ]
-    order = rng.sample(public, len(public))  # a random popularity ranking
-    docs_by_id = {e["id"]: e for e in public}
-    people = students + [u for lst in club_admins.values() for u in lst]
+    order = rng.sample(public, len(public))  # a random popularity ranking, skewed so the Top 10 is not flat
+    weights = [(0.3 if e["slot"] == "past" else 1.0) / (rank + 1) ** 0.8 for rank, e in enumerate(order)]
+    people = students + list(club_admin.values())
 
     def rand_ts(e: dict):
         lo, hi = now - timedelta(days=14), min(now, e["start"])
@@ -410,14 +414,9 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
 
     pairs: set[tuple[ObjectId, ObjectId]] = set()
     saved_pairs: list[tuple[dict, dict]] = []
-    attempts = 0
-    while len(pairs) < N_SAVES and attempts < N_SAVES * 20:
-        attempts += 1
-        e = rng.choices(order, weights)[0]
-        s = rng.choice(students)
-        if (s["_id"], e["id"]) in pairs:
-            continue
-        saved, created = await saved_svc.save_event(db, s["_id"], e["id"])
+
+    async def do_save(s: dict, e: dict) -> None:
+        saved, _ = await saved_svc.save_event(db, s["_id"], e["id"])  # the real service: counters stay consistent
         pairs.add((s["_id"], e["id"]))
         ts = rand_ts(e)
         await db.saved_events.update_one({"_id": saved["_id"]}, {"$set": {"created_at": ts}})
@@ -425,6 +424,15 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
             {"event_id": e["id"], "user_id": s["_id"], "type": "save"}, {"$set": {"ts": ts}}
         )
         saved_pairs.append((s, e))
+
+    for title in DEMO_SAVES:  # the demo student's saves, including the overlapping pair
+        await do_save(students[0], by_title[title])
+    attempts = 0
+    while len(pairs) < N_SAVES and attempts < N_SAVES * 20:
+        attempts += 1
+        e, s = rng.choices(order, weights)[0], rng.choice(students)
+        if (s["_id"], e["id"]) not in pairs:
+            await do_save(s, e)
 
     interactions: list[dict] = []
     counters: dict[ObjectId, dict[str, int]] = {}
@@ -438,10 +446,9 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
     for _ in range(N_VIEWS):
         log("view", rng.choices(order, weights)[0], rng.choice(people) if rng.random() < 0.7 else None, "views")
     reg_required = {
-        e["id"]
-        for e in public
+        e["id"] for e in public
         if (await db.events.find_one({"_id": e["id"]}, {"registration.required": 1}))["registration"]["required"]
-    }
+    }  # fmt: skip
     clicked_pairs: set[tuple[ObjectId, ObjectId]] = set()
     for s, e in saved_pairs:  # some saved events were followed through to the registration page
         if e["id"] in reg_required and rng.random() < 0.3:
@@ -449,8 +456,12 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
             clicked_pairs.add((s["_id"], e["id"]))
     reg_pool = [e for e in order if e["id"] in reg_required]
     while sum(1 for i in interactions if i["type"] == "registration_click") < N_CLICKS and reg_pool:
-        e = rng.choice(reg_pool)
-        log("registration_click", e, rng.choice(students) if rng.random() < 0.8 else None, "registration_clicks")
+        log(
+            "registration_click",
+            rng.choice(reg_pool),
+            rng.choice(students) if rng.random() < 0.8 else None,
+            "registration_clicks",
+        )
     await db.event_interactions.insert_many(interactions)
     await db.events.bulk_write(
         [UpdateOne({"_id": eid}, {"$inc": {f"stats.{k}": v for k, v in c.items()}}) for eid, c in counters.items()]
@@ -459,15 +470,14 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
         await db.saved_events.update_one(
             {"user_id": uid, "event_id": eid}, {"$set": {"status": "registration_initiated"}}
         )
-    assert docs_by_id
 
     # ---------------------------------------------------------------- community (through the services)
     posts: list[dict] = []
-    scopes = ([PostScope(type="global")] * 8
-              + [PostScope(type="event", ref_id=str(e["id"])) for e in rng.sample(public, 6)]
-              + [PostScope(type="club", ref_id=str(club_docs[c[0]]["_id"])) for c in rng.sample([c for c in CLUBS if c[3]], 6)])  # fmt: skip
-    for title, scope in zip(POST_TITLES[:N_POSTS], scopes, strict=True):
-        author = rng.choice(people)
+    scopes = ([PostScope(type="global")] * 5
+              + [PostScope(type="event", ref_id=str(e["id"])) for e in rng.sample(public, 4)]
+              + [PostScope(type="club", ref_id=str(club_docs[n]["_id"])) for n in ("ACM", "THE MUSICAL CLUB (TMC)", "GLITCH")])  # fmt: skip
+    for n, (title, scope) in enumerate(zip(POST_TITLES[:N_POSTS], scopes, strict=True)):
+        author = students[0] if n in (1, 6) else rng.choice(people)  # the demo student authors two posts
         posts.append(await community_svc.create_post(db, author, PostCreate(
             scope=scope, title=title, body=rng.choice(POST_BODIES), tags=rng.sample(["help", "teamup", "advice", "events", "campus"], 2))))  # fmt: skip
     by_post: dict[ObjectId, list[dict]] = {p["_id"]: [] for p in posts}
@@ -499,13 +509,12 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
         r["_id"]: r["count"]
         async for r in await db.events.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}])
     }
-    sample_student = next(s for s in students if s["interests"])
     return {
         "counts": counts, "events_by_status": by_status, "posters": pngs,
         "credentials": {
-            "student": (sample_student["email"], PASSWORD),
-            "club_admin": (club_admins["ACM"][0]["email"], PASSWORD),
-            "platform_admin": (get_settings().platform_admin_email, get_settings().platform_admin_password),
+            "student": (DEMO_STUDENT, PASSWORD),
+            "club_admin": (f"acm@{DOMAIN}", PASSWORD),
+            "platform_admin": (DEMO_ADMIN, PASSWORD),
         },
     }  # fmt: skip
 
@@ -518,7 +527,9 @@ def print_summary(res: dict) -> None:
     print("\nSample logins")
     for role, (email, pw) in res["credentials"].items():
         print(f"  {role:<15}{email}  /  {pw}")
-    print("\nNext: uvicorn app.main:app --reload  ->  http://localhost:8000/docs\n")
+    print(
+        "\nNext: uvicorn app.main:app --reload  ->  http://localhost:8000/docs   (frontend: cd ../happenmuj-frontend && npm run dev)\n"
+    )
 
 
 async def main() -> None:

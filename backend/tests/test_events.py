@@ -61,14 +61,54 @@ async def test_events_of_many_shapes_coexist_in_one_collection(client, make_club
     assert len(shapes) >= 6
 
 
-async def test_unknown_detail_field_and_mismatched_tag_rejected(client, make_club, event_payload):
+async def test_details_is_free_form_but_guards_cross_type_fields(client, make_club, event_payload):
     club, owner = await make_club("Club A")
-    r = await client.post("/events", headers=owner.headers, json=event_payload(club["id"], details={"nope": 1}))
-    assert r.status_code == 422
+    # free-form: a key the backend has never heard of is kept (the frontend's eventDetails.ts is the contract)
+    r = await client.post(
+        "/events", headers=owner.headers, json=event_payload(club["id"], details={"topics": ["x"], "nope": 1})
+    )
+    assert r.status_code == 201 and r.json()["details"]["nope"] == 1 and r.json()["details"]["topics"] == ["x"]
+    # ...but a field that belongs to ANOTHER event type is still rejected
+    r = await client.post("/events", headers=owner.headers, json=event_payload(club["id"], details={"tracks": ["web"]}))
+    assert r.status_code == 422 and "do not belong" in str(r.json())
     r = await client.post(
         "/events", headers=owner.headers, json=event_payload(club["id"], details={"event_type": "hackathon"})
     )
     assert r.status_code == 422
+
+
+async def test_details_accepts_the_shapes_the_frontend_form_sends(client, make_club, event_payload):
+    club, owner = await make_club("Club A")
+    forms = {
+        # hackathon prizes are plain lines (not {rank, reward} objects)
+        "hackathon": {"themes": ["AI"], "prizes": ["1st: ₹25,000", "2nd: ₹10,000"], "max_teams": 30},
+        # a date input yields 'YYYY-MM-DD', and a speaker may be given without a name
+        "cultural_show": {"auditions_required": True, "audition_date": "2026-11-05", "artists": ["A"]},
+        "seminar": {"speaker": {"affiliation": "IIT"}, "topic": "Quantum", "q_and_a_enabled": True},
+        "competition": {"prizes": [{"rank": "1st", "reward": "₹5,000"}], "rounds": [{"name": "Prelims", "description": ""}]},
+        "social": {"extra": {"notes": "Bring snacks"}},
+        "sports_match": {"sport": "Football", "teams": [{"name": "CSE"}, {"name": "ECE"}]},
+    }  # fmt: skip
+    for etype, details in forms.items():
+        r = await client.post(
+            "/events", headers=owner.headers, json=event_payload(club["id"], event_type=etype, details=details)
+        )
+        assert r.status_code == 201, (etype, r.text)
+        stored = r.json()["details"]
+        assert stored == details, (etype, stored)  # stored exactly as sent: no injected defaults
+
+
+async def test_patch_may_resend_club_id_but_not_move_the_event(client, make_club, make_event):
+    club, owner = await make_club("Club A")
+    other, _ = await make_club("Club B")
+    ev = await make_event(club["id"], owner)
+    # the edit form re-sends the whole input including club_id
+    ok = await client.patch(
+        f"/events/{ev['id']}", headers=owner.headers, json={"club_id": club["id"], "title": "Edited"}
+    )
+    assert ok.status_code == 200 and ok.json()["title"] == "Edited"
+    moved = await client.patch(f"/events/{ev['id']}", headers=owner.headers, json={"club_id": other["id"]})
+    assert moved.status_code == 409 and moved.json()["error"]["code"] == "club_change_not_allowed"
 
 
 # ---------------------------------------------------------------- fee / team / registration rules
@@ -104,9 +144,10 @@ async def test_fee_not_specified_is_default_and_never_free(client, make_club, ev
 async def test_fee_display_strings(client, make_club, event_payload):
     club, owner = await make_club("Club A")
     cases = [
-        ({"type": "fixed", "amount": 199}, "Rs 199"),
-        ({"type": "per_participant", "amount": 199}, "Rs 199 per participant"),
-        ({"type": "per_team", "amount": 99.5}, "Rs 99.50 per team"),
+        ({"type": "fixed", "amount": 199}, "₹199"),
+        ({"type": "per_participant", "amount": 199}, "₹199 per participant"),
+        ({"type": "per_team", "amount": 99.5}, "₹99.5 per team"),
+        ({"type": "fixed", "amount": 1234567}, "₹12,34,567"),  # en-IN digit grouping, like the frontend
     ]
     for fee, expected in cases:
         r = await client.post("/events", headers=owner.headers, json=event_payload(club["id"], fee=fee))
@@ -116,7 +157,7 @@ async def test_fee_display_strings(client, make_club, event_payload):
 @pytest.mark.parametrize(
     "team,ok,display",
     [
-        ({"type": "range", "min": 2, "max": 4}, True, "2-4 members"),
+        ({"type": "range", "min": 2, "max": 4}, True, "2–4 members"),
         ({"type": "range", "min": 2}, False, None),
         ({"type": "range", "min": 5, "max": 2}, False, None),
         ({"type": "fixed", "min": 3, "max": 3}, True, "Exactly 3 members"),
@@ -269,7 +310,9 @@ async def test_full_lifecycle(client, make_club, make_event, admin):
     r = await client.post(f"/events/{eid}/cancel", headers=owner.headers, json={"reason": "Speaker unavailable"})
     assert r.json()["status"] == "cancelled" and r.json()["cancelled"] is True
     assert r.json()["cancel_reason"] == "Speaker unavailable" and r.json()["cancelled_at"]
-    assert (await client.get(f"/events/{eid}")).status_code == 404  # cancelled is not public
+    # a cancelled event stays readable by id (saved lists and shared links must explain what happened)
+    anon = await client.get(f"/events/{eid}")
+    assert anon.status_code == 200 and anon.json()["status"] == "cancelled" and anon.json()["cancel_reason"]
     assert (await client.get(f"/events/{eid}", headers=owner.headers)).status_code == 200
     assert (await client.patch(f"/events/{eid}", headers=owner.headers, json={"title": "x"})).status_code == 409
 

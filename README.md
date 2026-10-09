@@ -5,13 +5,13 @@ project**. The backend is a FastAPI REST API on **MongoDB**, designed to show *w
 schemas, embedded documents vs references, aggregation pipelines, text search, TTL / partial / multikey indexes,
 GridFS, multi-document transactions and `$jsonSchema` validation.
 
-* **Backend: complete** (58 endpoints, 191 tests against a real MongoDB, demo seed data).
-* **Frontend: not started.** It will be built last, on top of this API, once design references and logos exist
-  (`frontend/` is an empty placeholder).
+* **Backend: complete** (58 endpoints, tests against a real MongoDB, demo seed data).
+* **Frontend: done and wired to this API**: `happenmuj-frontend/` (Vite + React + TypeScript). See
+  [Run the whole stack](#run-the-whole-stack-backend--frontend).
 
 ## Contents
 
-1. [Quick start](#quick-start)
+1. [Quick start](#quick-start) · [Run the whole stack](#run-the-whole-stack-backend--frontend)
 2. [Where each MongoDB feature lives](#where-each-mongodb-feature-lives)
 3. [10-minute viva demo script](#10-minute-viva-demo-script)
 4. [Documentation map](#documentation-map)
@@ -33,7 +33,7 @@ uv sync --python 3.12
 cp ../.env.example .env               # if you used local_mongo.sh, set MONGO_URI=mongodb://localhost:27018/?replicaSet=rs0
 
 # 3) Demo data, then the API
-.venv/bin/python -m app.seed --reset  # ~20 s; WIPES the configured database; prints sample logins
+.venv/bin/python -m app.seed --reset  # ~10 s; WIPES the configured database; prints demo logins
 .venv/bin/uvicorn app.main:app --reload    # http://localhost:8000/docs  (Swagger UI); if port 8000 is busy add --port 8001
 ```
 
@@ -45,13 +45,58 @@ cp ../.env.example .env               # if you used local_mongo.sh, set MONGO_UR
 `.env` leaves `ALLOWED_EMAIL_DOMAINS` empty in development (any email may register). Set it to
 `jaipur.manipal.edu` to restrict sign-ups.
 
-**Sample logins** (printed by the seed; all seeded passwords are `password123`):
+**Demo logins** (created by the seed; password `demo1234` for every seeded user):
 
-| Role | Email | Password |
-|---|---|---|
-| Student | `aarav.sharma1@jaipur.manipal.edu` | `password123` |
-| Club admin (ACM) | `admin.acm1@jaipur.manipal.edu` | `password123` |
-| Platform admin | value of `PLATFORM_ADMIN_EMAIL` (default `admin@jaipur.manipal.edu`) | `PLATFORM_ADMIN_PASSWORD` (default `admin12345`) |
+| Role | Email |
+|---|---|
+| Student | `student@muj-demo.edu` |
+| Club admin (ACM) | `acm@muj-demo.edu` (every club has one: `<club-slug>@muj-demo.edu`, e.g. `ieee-sb@muj-demo.edu`) |
+| Platform admin | `admin@muj-demo.edu` (the `.env` defaults for `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD`) |
+
+The seed creates the 16 MUJ clubs (all verified), ~40 events spread over them (today, tomorrow, this week, later,
+past, plus cancelled, pending review, draft and rejected ones, and exactly one featured event), a demo student
+who has saved an *overlapping* pair of events, and a handful of posts, comments and reactions.
+
+## Run the whole stack (backend + frontend)
+
+Four terminals, or `make` targets (`make help`). Ports: API `8000`, frontend `5173`.
+
+```bash
+# 1) MongoDB (single-node replica set)
+docker compose up -d                 # or: ./scripts/local_mongo.sh   (no Docker; port 27018, set MONGO_URI to match)
+
+# 2) API + demo data
+cd backend && uv sync --python 3.12 && cp ../.env.example .env     # first time only
+.venv/bin/python -m app.seed --reset                                # 16 clubs, 40 events, demo logins
+.venv/bin/uvicorn app.main:app --reload --port 8000                 # http://localhost:8000/docs
+
+# 3) Frontend (a separate terminal)
+cd happenmuj-frontend && npm install                               # first time only
+npm run dev                                                         # http://localhost:5173
+```
+
+`happenmuj-frontend/.env` must contain `VITE_API_BASE_URL=/api` to use this API (empty = the frontend's built-in
+sample data). The Vite dev server proxies `/api` to `VITE_PROXY_TARGET` (default `http://localhost:8000`), so the
+browser needs no CORS in development. The backend serves the same routes at `/api` (what the frontend calls) and
+`/api/v1` (Swagger UI, tests, docs). If port 8000 is busy, start uvicorn on another port and run the frontend with
+`VITE_PROXY_TARGET=http://localhost:8001 npm run dev`. To call the API directly instead of through the proxy, set
+`VITE_API_BASE_URL=http://localhost:8000/api` and make sure the backend's `CORS_ORIGINS` includes
+`http://localhost:5173` (it does by default).
+
+Make shortcuts: `make mongo`, `make seed`, `make api`, `make web` (override with `API_PORT=8001`), `make test`.
+
+**Verify the wiring** (with the API running on a seeded database):
+
+```bash
+python3 scripts/smoke_test.py http://localhost:8000/api         # 74 checks through the same /api paths the frontend uses
+python3 scripts/smoke_test.py http://localhost:5173/api         # ...and through the Vite dev proxy
+cd happenmuj-frontend && LIVE_API=http://localhost:8000/api npm run test:live   # real React UI (jsdom) against the real API
+cd happenmuj-frontend && npm run typecheck && npm test && npm run build         # the frontend's own checks (sample data)
+```
+
+Both the smoke test and `test:live` create data (an event, a comment), so run `make seed` again afterwards for a
+pristine demo. The "Try a demo account" buttons on the sign-in page appear only in the frontend's sample-data
+mode; with the real API, type the demo credentials above.
 
 ## Where each MongoDB feature lives
 
@@ -79,9 +124,9 @@ Adjust `mongosh --port 27018` to your Mongo port (27017 for Docker).
 B=http://localhost:8000/api/v1
 login() { curl -s -X POST $B/auth/login -H 'content-type: application/json' \
           -d "{\"email\":\"$1\",\"password\":\"$2\"}" | jq -r .access_token; }
-ADMIN=$(login admin.acm1@jaipur.manipal.edu password123)       # club admin (ACM)
-STUDENT=$(login aarav.sharma1@jaipur.manipal.edu password123)  # student
-PLATFORM=$(login admin@jaipur.manipal.edu admin12345)          # platform admin
+ADMIN=$(login acm@muj-demo.edu demo1234)         # club admin (ACM)
+STUDENT=$(login student@muj-demo.edu demo1234)   # student
+PLATFORM=$(login admin@muj-demo.edu demo1234)    # platform admin
 ```
 
 ### 0:00 The data model (1 min)
@@ -95,8 +140,9 @@ Mention: 9 collections + GridFS, 20 secondary indexes ([DESIGN_DECISIONS](docs/D
 db.events.aggregate([{$group:{_id:"$event_type", n:{$sum:1},
   detailsKeys:{$first:{$map:{input:{$objectToArray:"$details"},in:"$$this.k"}}}}},{$sort:{_id:1}}])
 ```
-Eight `event_type`s, each with different `details` keys, no NULL columns, no per-type tables
-(the relational equivalent is 18 tables: [SQL_COMPARISON](docs/SQL_COMPARISON.md) section 2).
+Seven `event_type`s are in the seed (the model supports eight; there is no sports club, so no sports match), each with
+different `details` keys, no NULL columns, no per-type tables (the relational equivalent is 18 tables:
+[SQL_COMPARISON](docs/SQL_COMPARISON.md) section 2).
 
 Now show the guardrail. Try to create a **workshop that carries competition fields** (`prizes`):
 ```bash
@@ -120,7 +166,7 @@ Swagger UI: authorize as the ACM club admin (the lock icon, paste the token from
 
 Cross-club denial:
 ```bash
-IEEE_EV=$(curl -s "$B/events?club=ieee&page_size=1" | jq -r '.items[0].id')
+IEEE_EV=$(curl -s "$B/events?club=ieee-sb&page_size=1" | jq -r '.items[0].id')
 curl -s -X PATCH $B/events/$IEEE_EV -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' -d '{"title":"hijack"}' | jq -c .
 # -> {"error":{"code":"forbidden","message":"You are not an admin of this club"}}
 ```
@@ -128,9 +174,9 @@ curl -s -X PATCH $B/events/$IEEE_EV -H "Authorization: Bearer $ADMIN" -H 'conten
 ### 4:30 Discovery: filters, facets, weighted search (1.5 min)
 ```bash
 # (technical OR hackathon) AND (acm OR ieee): OR within a group, AND between groups, with facet counts
-curl -s "$B/events?category=technical&category=hackathon&club=acm&club=ieee" \
+curl -s "$B/events?category=technical&category=hackathon&club=acm&club=ieee-sb" \
   | jq -c '{total, titles:[.items[].title], categories:[.facets.categories[]|"\(.value)=\(.count)"]}'
-curl -s "$B/events?q=quantum" | jq -c '[.items[].title]'    # weighted $text search
+curl -s "$B/events?q=generative" | jq -c '[.items[].title]'    # weighted $text search
 ```
 Explain: one `$facet` pipeline returns the page, the total and both facets in a single round trip.
 
@@ -139,7 +185,7 @@ Explain: one `$facet` pipeline returns the page, the total and both facets in a 
 curl -s $B/home/top-events | jq '.items[0] | {rank, title, score, score_breakdown}'
 curl -s $B/home/top-events/config | jq '{weights, window_days}'   # the weights are in the open
 curl -s $B/home/tomorrow | jq '.items | length'                     # IST day boundaries
-curl -s $B/home/suggested -H "Authorization: Bearer $STUDENT" | jq '{personalized, first:.items[0].title}'
+curl -s $B/home/suggested -H "Authorization: Bearer $STUDENT" | jq '{personalised, first:.items[0].title}'
 ```
 Explain: one aggregation (`$lookup` over the last 7 days of interactions, `$setWindowFields` for
 max-normalisation); it is deliberately *not* ranked by all-time views, so old events cannot dominate. "Tomorrow" is
@@ -206,7 +252,9 @@ backend/
   scripts/     gen_api_docs.py gen_aggregation_showcase.py
   tests/       real-MongoDB tests (database happenmuj_test, dropped between sessions)
 docs/          design docs, generated docs, docs/sql/
-frontend/      placeholder ("built last")
+happenmuj-frontend/   the React app (Vite + TypeScript); src/lib/api/http.ts is its adapter for this API
+frontend/      unused placeholder
+Makefile       make help
 ```
 
 ## Configuration
@@ -226,7 +274,7 @@ frontend/      placeholder ("built last")
 
 ```bash
 cd backend
-.venv/bin/pytest -q          # 191 tests, ~65 s (the seed test alone is ~20 s)
+.venv/bin/pytest -q          # 202 tests, ~45 s (the seed test alone is ~15 s)
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 
@@ -241,7 +289,7 @@ save idempotency and concurrency, transaction rollbacks, comment-depth cap, reac
 
 ## Scope and limitations
 
-* **No frontend yet.** The API is demoable through Swagger UI.
+* The API is also demoable on its own through Swagger UI.
 * **Deliberately not built (Phase 2):** notifications and reminders, event-conflict detection, push, content
   reports/flagging, email verification/OTP, real Google Calendar integration, payments, attendance, certificates.
   Extension points are marked `# PHASE2:` in the code.

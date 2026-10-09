@@ -4,7 +4,7 @@ Pipeline *builders* are pure functions (no DB access) so docs/tests can print an
 Every one starts from ``public_filter()``: cancelled/draft/pending/rejected events never leak.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from bson import ObjectId
@@ -12,15 +12,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from app.core import timeutil
 from app.core.errors import AppError
-from app.models.discovery import (
-    CategoryFacet,
-    ClubFacet,
-    Facets,
-    FeaturedOut,
-    RankedEventCard,
-    ScoreBreakdown,
-    ScoredEventCard,
-)
+from app.models.discovery import Facets, FeaturedCard, RankedEventCard, RankedWindow, ScoredEventCard
 from app.models.events import EventCard
 from app.services.event_view import to_card
 from app.services.settings import get_ranking_settings
@@ -142,7 +134,7 @@ def top_events_pipeline(now: datetime, weights: dict[str, float], window_days: i
                 "components": {
                     "saves": norm("w_saves", "max_saves"),
                     "views": norm("w_views", "max_views"),
-                    "clicks": norm("w_clicks", "max_clicks"),
+                    "registration_clicks": norm("w_clicks", "max_clicks"),
                     "proximity": _decay(now, 7),
                     "urgency": {
                         "$cond": [
@@ -173,6 +165,8 @@ def top_events_pipeline(now: datetime, weights: dict[str, float], window_days: i
         {"$sort": {"score": -1, "schedule.start": 1, "_id": 1}},
         {"$limit": limit},
         *card_tail(now),
+        # Engagement inside the ranking window, exposed per item next to the score.
+        {"$addFields": {"window": {"saves": "$w_saves", "views": "$w_views", "registration_clicks": "$w_clicks"}}},
         {"$project": {f: 0 for f in ("ix", "w_saves", "w_views", "w_clicks", "max_saves", "max_views", "max_clicks")}},
     ]  # fmt: skip
 
@@ -255,18 +249,16 @@ def range_pipeline(now: datetime, start: datetime, end: datetime, limit: int) ->
 # ------------------------------------------------------------------ catalogue
 def catalogue_pipeline(
     now: datetime, *, q: str | None, categories: list[str], club_ids: list[ObjectId] | None,
-    date_from: date | None, date_to: date | None, sort: str, skip: int, limit: int,
+    start_from: datetime | None, start_to: datetime | None, sort: str, skip: int, limit: int,
 ) -> list[dict]:  # fmt: skip
     base = public_filter()
-    if date_from or date_to:
-        rng: dict[str, datetime] = {}
-        if date_from:
-            rng["$gte"] = timeutil.ist_day_range(date_from)[0]
-        if date_to:
-            rng["$lt"] = timeutil.ist_day_range(date_to)[1]
-        base["schedule.start"] = rng
-    else:
-        base["schedule.end"] = {"$gte": now}  # default: upcoming + ongoing (completed is derived)
+    # Published AND upcoming (start > now); an optional [start_from, start_to) window narrows it further.
+    rng: dict[str, datetime] = {"$gt": now}
+    if start_from:
+        rng["$gte"] = start_from
+    if start_to:
+        rng["$lt"] = start_to
+    base["schedule.start"] = rng
     if q:
         base["$text"] = {"$search": q}
     cat_f = {"category": {"$in": categories}} if categories else {}
@@ -343,18 +335,21 @@ async def to_cards(db: AsyncDatabase, docs: list[dict], user: dict | None, now: 
     return [to_card(d, now, None if saved is None else d["_id"] in saved) for d in docs]
 
 
-def _breakdown(doc: dict) -> ScoreBreakdown:
-    r = lambda d: {k: round(float(v), 4) for k, v in d.items()}  # noqa: E731
-    return ScoreBreakdown(components=r(doc["components"]), contributions=r(doc["contributions"]))
+def _rounded(d: dict) -> dict[str, float]:
+    return {k: round(float(v), 4) for k, v in d.items()}
 
 
 async def _scored(db, docs, user, now, ranked: bool):
     cards = await to_cards(db, docs, user, now)
     out = []
     for i, (card, doc) in enumerate(zip(cards, docs, strict=True), start=1):
-        extra: dict[str, Any] = {"score": round(float(doc["score"]), 4), "score_breakdown": _breakdown(doc)}
+        extra: dict[str, Any] = {
+            "score": round(float(doc["score"]), 4),
+            "score_breakdown": _rounded(doc["contributions"]),  # weighted terms, summing to the score
+            "components": _rounded(doc["components"]),  # normalised 0..1 inputs
+        }
         if ranked:
-            out.append(RankedEventCard(**card.model_dump(), rank=i, **extra))
+            out.append(RankedEventCard(**card.model_dump(), rank=i, window=RankedWindow(**doc["window"]), **extra))
         else:
             out.append(ScoredEventCard(**card.model_dump(), **extra))
     return out
@@ -382,8 +377,7 @@ async def suggested(
         return True, await _scored(db, docs, user, now, ranked=False)
     docs = await agg(db, popular_upcoming_pipeline(now, saved_ids, limit), limit)
     cards = await to_cards(db, docs, user, now)
-    zero = ScoreBreakdown(components={}, contributions={})
-    return False, [ScoredEventCard(**c.model_dump(), score=0.0, score_breakdown=zero) for c in cards]
+    return False, [ScoredEventCard(**c.model_dump(), score=0.0, score_breakdown={}) for c in cards]
 
 
 def featured_pipeline(now: datetime) -> list[dict]:
@@ -408,15 +402,17 @@ def featured_fallback_pipeline(now: datetime) -> list[dict]:
     ]
 
 
-async def featured(db: AsyncDatabase, user: dict | None, now: datetime) -> FeaturedOut:
+async def featured(db: AsyncDatabase, user: dict | None, now: datetime) -> FeaturedCard | None:
+    """The featured event as a plain card (with `source`), or None when nothing is upcoming."""
     docs = await agg(db, featured_pipeline(now), 1)
     source = "featured"
     if not docs:
         source = "fallback"
         docs = await agg(db, featured_fallback_pipeline(now), 1)
     if not docs:
-        return FeaturedOut(source="none", event=None)
-    return FeaturedOut(source=source, event=(await to_cards(db, docs, user, now))[0])
+        return None
+    card = (await to_cards(db, docs, user, now))[0]
+    return FeaturedCard(**card.model_dump(), source=source)
 
 
 async def in_range(db: AsyncDatabase, user: dict | None, now: datetime, start: datetime, end: datetime, limit: int):
@@ -435,25 +431,30 @@ async def resolve_club_ids(db: AsyncDatabase, refs: list[str]) -> list[ObjectId]
 
 async def catalogue(
     db: AsyncDatabase, user: dict | None, now: datetime, *, q: str | None, categories: list[str],
-    clubs: list[str], date_from: date | None, date_to: date | None, sort: str | None, skip: int, limit: int,
+    clubs: list[str], date_from: str | None, date_to: str | None, sort: str | None, skip: int, limit: int,
 ):  # fmt: skip
     bad = [c for c in categories if c not in CATEGORIES]
     if bad:
         raise AppError(422, "invalid_category", f"Unknown categories: {bad}")
-    if date_from and date_to and date_from > date_to:
-        raise AppError(422, "invalid_date_range", "date_from must not be after date_to")
+    try:
+        start_from = timeutil.parse_bound(date_from, upper=False) if date_from else None
+        start_to = timeutil.parse_bound(date_to, upper=True) if date_to else None
+    except ValueError as e:
+        raise AppError(422, "invalid_date", str(e)) from None
+    if start_from and start_to and start_from >= start_to:
+        raise AppError(422, "invalid_date_range", "date_from must be before date_to")
     if sort == "relevance" and not q:
         raise AppError(422, "invalid_sort", "sort=relevance requires q")
     club_ids = await resolve_club_ids(db, clubs) if clubs else None
     pipeline = catalogue_pipeline(
-        now, q=q, categories=categories, club_ids=club_ids, date_from=date_from, date_to=date_to,
+        now, q=q, categories=categories, club_ids=club_ids, start_from=start_from, start_to=start_to,
         sort=sort or ("relevance" if q else "date"), skip=skip, limit=limit,
     )  # fmt: skip
     facet = (await agg(db, pipeline, 1))[0]
     total = facet["total"][0]["n"] if facet["total"] else 0
     cards = await to_cards(db, facet["items"], user, now)
     facets = Facets(
-        categories=[CategoryFacet(value=f["_id"], count=f["count"]) for f in facet["by_category"]],
-        clubs=[ClubFacet(id=str(f["_id"]), name=f["name"], slug=f["slug"], count=f["count"]) for f in facet["by_club"]],
+        category={f["_id"]: f["count"] for f in facet["by_category"]},
+        club={str(f["_id"]): f["count"] for f in facet["by_club"]},
     )
     return cards, total, facets

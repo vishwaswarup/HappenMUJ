@@ -146,7 +146,7 @@ async def run(db) -> None:
     student = await db.users.find_one(
         {"role": "student", "interests": {"$ne": []}, "followed_club_ids": {"$ne": []}}, sort=[("created_at", 1)]
     )
-    acm, ieee = await db.clubs.find_one({"slug": "acm"}), await db.clubs.find_one({"slug": "ieee"})
+    acm, ieee = await db.clubs.find_one({"slug": "acm"}), await db.clubs.find_one({"slug": "ieee-sb"})
     post = (await (await db.posts.aggregate([{"$sort": {"comment_count": -1}}, {"$limit": 1}])).to_list(1))[0]
     cfg = await get_ranking_settings(db)
     saved_ids = [
@@ -207,18 +207,18 @@ async def run(db) -> None:
 
     # ---- discovery
     await d.pipeline(
-        db, title="Catalogue: filters + facets in one round trip", coll="events", endpoint="`GET /events?category=technical&category=hackathon&club=acm&club=ieee`",
+        db, title="Catalogue: filters + facets in one round trip", coll="events", endpoint="`GET /events?category=technical&category=hackathon&club=acm&club=ieee-sb`",
         features="`$match` (OR within a group via `$in`, AND between groups), `$facet` (items + total + 2 disjunctive facets), `$group`, `$sort`, `$skip/$limit`",
         purpose="Returns one page of event cards, the exact total, and per-category / per-club counts for the current filters, all from a single scan of the public-and-upcoming set. This is what a SQL application would do with 4 queries.",
-        pipeline=discovery.catalogue_pipeline(now, q=None, categories=["technical", "hackathon"], club_ids=[acm["_id"], ieee["_id"]], date_from=None, date_to=None, sort="date", skip=0, limit=20),
+        pipeline=discovery.catalogue_pipeline(now, q=None, categories=["technical", "hackathon"], club_ids=[acm["_id"], ieee["_id"]], start_from=None, start_to=None, sort="date", skip=0, limit=20),
         note="The base `$match` (`status`, `schedule.end`) is index-served; the `$facet` branches operate on those documents in memory.",
-        params="categories technical+hackathon, clubs ACM+IEEE",
+        params="categories technical+hackathon, clubs ACM+IEEE SB",
     )  # fmt: skip
     await d.pipeline(
         db, title="Weighted full-text search", coll="events", endpoint="`GET /events?q=cloud`",
         features="`$text` with a weighted text index (title 10, tags 6, club name 5, one_liner 3, venue 2, description 1), `$meta: textScore`, `$facet`",
         purpose="Relevance-ranked search: a hit in the title outranks the same hit in the description. `$text` must be the first stage, so visibility filters ride in the same `$match`.",
-        pipeline=discovery.catalogue_pipeline(now, q="cloud", categories=[], club_ids=None, date_from=None, date_to=None, sort="relevance", skip=0, limit=20),
+        pipeline=discovery.catalogue_pipeline(now, q="cloud", categories=[], club_ids=None, start_from=None, start_to=None, sort="relevance", skip=0, limit=20),
         note="`TEXT_MATCH` over the `events_text` index; no collection scan.",
         params='q="cloud"',
     )  # fmt: skip

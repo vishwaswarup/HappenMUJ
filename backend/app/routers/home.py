@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from app.core import timeutil
 from app.core.deps import DB, OptionalUser
-from app.models.discovery import EventList, FeaturedOut, RankingConfigOut, SuggestedOut, TopEventsOut
+from app.models.discovery import EventList, FeaturedCard, RankingConfigOut, SuggestedOut, TopEventsOut
 from app.services import discovery
 from app.services.settings import get_ranking_settings
 
@@ -13,9 +13,11 @@ Limit = Annotated[int, Query(ge=1, le=50)]
 
 
 @router.get(
-    "/featured", response_model=FeaturedOut, summary="Platform-admin featured event (fallback: soonest with poster)"
+    "/featured",
+    response_model=FeaturedCard | None,
+    summary="Platform-admin featured event as a card, or null (fallback: soonest with poster)",
 )
-async def featured(db: DB, user: OptionalUser) -> FeaturedOut:
+async def featured(db: DB, user: OptionalUser) -> FeaturedCard | None:
     return await discovery.featured(db, user, timeutil.now())
 
 
@@ -25,8 +27,8 @@ async def featured(db: DB, user: OptionalUser) -> FeaturedOut:
     summary="Logged in: rule-based score from interests/categories/clubs. Anonymous: upcoming by popularity",
 )
 async def suggested(db: DB, user: OptionalUser, limit: Limit = 10) -> SuggestedOut:
-    personalized, items = await discovery.suggested(db, user, timeutil.now(), limit)
-    return SuggestedOut(personalized=personalized, items=items)
+    personalised, items = await discovery.suggested(db, user, timeutil.now(), limit)
+    return SuggestedOut(personalised=personalised, items=items)
 
 
 @router.get("/top-events", response_model=TopEventsOut, summary="Top 10 events to participate in (windowed engagement)")
@@ -44,7 +46,7 @@ async def top_events_config(db: DB) -> RankingConfigOut:
         formula={
             "saves": "saves in window / max saves in window across eligible events",
             "views": "views in window / max views in window",
-            "clicks": "registration clicks in window / max registration clicks in window",
+            "registration_clicks": "registration clicks in window / max registration clicks in window",
             "proximity": "exp(-days_until_start / 7)",
             "urgency": "1.0 if registration deadline within 72h; 0.5 if registration required and open; else 0",
             "score": "sum of weight * component",

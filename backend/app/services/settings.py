@@ -7,7 +7,7 @@ from app.models.common import SCHEMA_VERSION
 
 RANKING_ID = "ranking"
 DEFAULT_RANKING = {
-    "weights": {"saves": 0.30, "views": 0.20, "clicks": 0.20, "proximity": 0.20, "urgency": 0.10},
+    "weights": {"saves": 0.30, "views": 0.20, "registration_clicks": 0.20, "proximity": 0.20, "urgency": 0.10},
     "window_days": 7,
 }
 
@@ -24,4 +24,8 @@ async def get_ranking_settings(db: AsyncDatabase) -> dict:
     doc = await db.settings.find_one({"_id": RANKING_ID})
     if doc is None:  # never fail a request because the settings doc is missing
         return {"_id": RANKING_ID, **DEFAULT_RANKING, "updated_at": None}
-    return {**DEFAULT_RANKING, **doc, "weights": {**DEFAULT_RANKING["weights"], **doc.get("weights", {})}}
+    weights = dict(doc.get("weights", {}))
+    if "clicks" in weights:  # older settings documents used the key "clicks"
+        weights.setdefault("registration_clicks", weights.pop("clicks"))
+        weights.pop("clicks", None)
+    return {**DEFAULT_RANKING, **doc, "weights": {**DEFAULT_RANKING["weights"], **weights}}

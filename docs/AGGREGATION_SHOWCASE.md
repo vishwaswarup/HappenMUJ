@@ -1,6 +1,6 @@
 # Aggregation showcase
 
-_Generated 2026-10-09 08:25 UTC by `backend/scripts/gen_aggregation_showcase.py` against MongoDB 8.0.28 with the demo seed 55 events, 400 saved_events, 3000 event_interactions, 20 posts, 120 comments, 300 reactions.
+_Generated 2026-10-09 09:00 UTC by `backend/scripts/gen_aggregation_showcase.py` against MongoDB 8.0.28 with the demo seed 40 events, 180 saved_events, 1600 event_interactions, 12 posts, 50 comments, 100 reactions.
 Every pipeline below is imported from the code that serves the API (not retyped), and every `explain` block was captured from the server._
 
 **How to read the explain tables.** `totalKeysExamined` = index entries read; `totalDocsExamined` = documents fetched; `nReturned` = documents the query planner hands to the rest of the pipeline. A healthy indexed query reads few keys/docs relative to the collection size (the numbers above give the sizes). With only a few dozen events the planner's wall-clock times are ~1 ms either way, so the *keys/docs examined* columns are the meaningful evidence, not milliseconds.
@@ -36,13 +36,13 @@ Every pipeline below is imported from the code that serves the API (not retyped)
 
 ### 1. Catalogue: filters + facets in one round trip
 
-**Endpoint:** `GET /events?category=technical&category=hackathon&club=acm&club=ieee`  
+**Endpoint:** `GET /events?category=technical&category=hackathon&club=acm&club=ieee-sb`  
 **Collection:** `events`  
 **MongoDB features:** `$match` (OR within a group via `$in`, AND between groups), `$facet` (items + total + 2 disjunctive facets), `$group`, `$sort`, `$skip/$limit`
 
 **Purpose.** Returns one page of event cards, the exact total, and per-category / per-club counts for the current filters, all from a single scan of the public-and-upcoming set. This is what a SQL application would do with 4 queries.
 
-_Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
+_Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE SB
 
 <details><summary>Pipeline (2 stages, exact JSON the API runs)</summary>
 
@@ -52,9 +52,9 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
     "$match": {
       "status": "published",
       "cancelled_at": null,
-      "schedule.end": {
-        "$gte": {
-          "$date": "2026-10-09T08:25:04.955Z"
+      "schedule.start": {
+        "$gt": {
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       }
     }
@@ -73,10 +73,10 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
             "club_id": {
               "$in": [
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b6"
+                  "$oid": "6ac8ad08a9822dfad39034fb"
                 },
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b8"
+                  "$oid": "6ac8ad08a9822dfad39034fd"
                 }
               ]
             }
@@ -157,7 +157,7 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
                       "$gt": [
                         "$registration.deadline",
                         {
-                          "$date": "2026-10-09T08:25:04.955Z"
+                          "$date": "2026-10-09T09:00:01.636Z"
                         }
                       ]
                     }
@@ -167,7 +167,7 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
                   "$gt": [
                     "$schedule.start",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 }
@@ -202,10 +202,10 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
             "club_id": {
               "$in": [
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b6"
+                  "$oid": "6ac8ad08a9822dfad39034fb"
                 },
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b8"
+                  "$oid": "6ac8ad08a9822dfad39034fd"
                 }
               ]
             }
@@ -221,10 +221,10 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
             "club_id": {
               "$in": [
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b6"
+                  "$oid": "6ac8ad08a9822dfad39034fb"
                 },
                 {
-                  "$oid": "6ac8a4d1ae2f822d6c0686b8"
+                  "$oid": "6ac8ad08a9822dfad39034fd"
                 }
               ]
             }
@@ -289,9 +289,9 @@ _Parameters used here:_ categories technical+hackathon, clubs ACM+IEEE
 | Winning plan | `FETCH > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 37 |
-| totalKeysExamined | 45 |
-| totalDocsExamined | 45 |
+| nReturned | 26 |
+| totalKeysExamined | 26 |
+| totalDocsExamined | 26 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -315,9 +315,9 @@ _Parameters used here:_ q="cloud"
     "$match": {
       "status": "published",
       "cancelled_at": null,
-      "schedule.end": {
-        "$gte": {
-          "$date": "2026-10-09T08:25:04.955Z"
+      "schedule.start": {
+        "$gt": {
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       },
       "$text": {
@@ -411,7 +411,7 @@ _Parameters used here:_ q="cloud"
                       "$gt": [
                         "$registration.deadline",
                         {
-                          "$date": "2026-10-09T08:25:04.955Z"
+                          "$date": "2026-10-09T09:00:01.636Z"
                         }
                       ]
                     }
@@ -421,7 +421,7 @@ _Parameters used here:_ q="cloud"
                   "$gt": [
                     "$schedule.start",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 }
@@ -499,9 +499,9 @@ _Parameters used here:_ q="cloud"
 | Winning plan | `FETCH > TEXT_MATCH(events_text) > TEXT_OR > IXSCAN(events_text)` |
 |---|---|
 | Index | **index scan** on `events_text` |
-| nReturned | 1 |
-| totalKeysExamined | 3 |
-| totalDocsExamined | 6 |
+| nReturned | 0 |
+| totalKeysExamined | 0 |
+| totalDocsExamined | 0 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -515,9 +515,9 @@ _Parameters used here:_ q="cloud"
 
 **Purpose.** One pipeline computes the score from windowed engagement (last 7 days) + proximity + urgency, using configurable weights from the `settings` collection. Old all-time views cannot dominate because only interactions inside the window are counted. Each result carries its `score_breakdown` for transparency.
 
-_Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'proximity': 0.2, 'urgency': 0.1}, window_days 7
+_Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'registration_clicks': 0.2, 'proximity': 0.2, 'urgency': 0.1}, window_days 7
 
-<details><summary>Pipeline (12 stages, exact JSON the API runs)</summary>
+<details><summary>Pipeline (13 stages, exact JSON the API runs)</summary>
 
 ```json
 [
@@ -527,7 +527,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
       "cancelled_at": null,
       "schedule.start": {
         "$gt": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       },
       "$or": [
@@ -542,7 +542,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
         {
           "registration.deadline": {
             "$gt": {
-              "$date": "2026-10-09T08:25:04.955Z"
+              "$date": "2026-10-09T09:00:01.636Z"
             }
           }
         }
@@ -559,7 +559,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
           "$match": {
             "ts": {
               "$gte": {
-                "$date": "2026-10-02T08:25:04.955Z"
+                "$date": "2026-10-02T09:00:01.636Z"
               }
             }
           }
@@ -704,7 +704,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
             0
           ]
         },
-        "clicks": {
+        "registration_clicks": {
           "$cond": [
             {
               "$gt": [
@@ -733,7 +733,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
                         "$subtract": [
                           "$schedule.start",
                           {
-                            "$date": "2026-10-09T08:25:04.955Z"
+                            "$date": "2026-10-09T09:00:01.636Z"
                           }
                         ]
                       },
@@ -771,7 +771,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
                   "$lte": [
                     "$registration.deadline",
                     {
-                      "$date": "2026-10-12T08:25:04.955Z"
+                      "$date": "2026-10-12T09:00:01.636Z"
                     }
                   ]
                 }
@@ -810,10 +810,10 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
             "$components.views"
           ]
         },
-        "clicks": {
+        "registration_clicks": {
           "$multiply": [
             0.2,
-            "$components.clicks"
+            "$components.registration_clicks"
           ]
         },
         "proximity": {
@@ -837,7 +837,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
         "$add": [
           "$contributions.saves",
           "$contributions.views",
-          "$contributions.clicks",
+          "$contributions.registration_clicks",
           "$contributions.proximity",
           "$contributions.urgency"
         ]
@@ -881,7 +881,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
                 "$gt": [
                   "$registration.deadline",
                   {
-                    "$date": "2026-10-09T08:25:04.955Z"
+                    "$date": "2026-10-09T09:00:01.636Z"
                   }
                 ]
               }
@@ -891,7 +891,7 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
             "$gt": [
               "$schedule.start",
               {
-                "$date": "2026-10-09T08:25:04.955Z"
+                "$date": "2026-10-09T09:00:01.636Z"
               }
             ]
           }
@@ -905,6 +905,15 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
       "details": 0,
       "contact": 0,
       "change_log": 0
+    }
+  },
+  {
+    "$addFields": {
+      "window": {
+        "saves": "$w_saves",
+        "views": "$w_views",
+        "registration_clicks": "$w_clicks"
+      }
     }
   },
   {
@@ -928,10 +937,10 @@ _Parameters used here:_ weights {'saves': 0.3, 'views': 0.2, 'clicks': 0.2, 'pro
 | Winning plan | `FETCH > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 33 |
-| totalKeysExamined | 37 |
-| totalDocsExamined | 37 |
-| executionTimeMillis | 5 |
+| nReturned | 23 |
+| totalKeysExamined | 26 |
+| totalDocsExamined | 26 |
+| executionTimeMillis | 3 |
 | rejected plans | 0 |
 
 Index-served prefix: eligible events by `status` + `schedule.start`. The `$lookup` into `event_interactions` is explained in the next entry.
@@ -947,11 +956,11 @@ Index-served prefix: eligible events by `status` + `schedule.start`. The `$looku
 ```js
 db.event_interactions.find({
   "event_id": {
-    "$oid": "6ac8a4d2ae2f822d6c0686d2"
+    "$oid": "6ac8ad0aa9822dfad3903573"
   },
   "ts": {
     "$gte": {
-      "$date": "2026-10-02T08:25:04.955Z"
+      "$date": "2026-10-02T09:00:01.636Z"
     }
   }
 })
@@ -962,9 +971,9 @@ db.event_interactions.find({
 | Winning plan | `FETCH > IXSCAN(event_type_ts)` |
 |---|---|
 | Index | **index scan** on `event_type_ts` |
-| nReturned | 29 |
-| totalKeysExamined | 33 |
-| totalDocsExamined | 29 |
+| nReturned | 19 |
+| totalKeysExamined | 23 |
+| totalDocsExamined | 19 |
 | executionTimeMillis | 0 |
 | rejected plans | 1 |
 
@@ -978,7 +987,7 @@ The windowed counts per event come from the index entries for that `event_id` on
 
 **Purpose.** Rule-based personal score `0.35·interest + 0.20·category + 0.20·club + 0.15·date + 0.10·deadline`. Tags and interests are lower-cased on write so comparison is exact and index-friendly.
 
-_Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'music', 'football', 'machine learning'], 2 followed clubs, 6 saved events excluded
+_Parameters used here:_ Rohan Sharma: interests ['dance', 'public speaking', 'music', 'football', 'machine learning'], 1 followed clubs, 8 saved events excluded
 
 <details><summary>Pipeline (8 stages, exact JSON the API runs)</summary>
 
@@ -990,7 +999,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
       "cancelled_at": null,
       "schedule.start": {
         "$gt": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       },
       "$or": [
@@ -1005,7 +1014,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
         {
           "registration.deadline": {
             "$gt": {
-              "$date": "2026-10-09T08:25:04.955Z"
+              "$date": "2026-10-09T09:00:01.636Z"
             }
           }
         }
@@ -1013,22 +1022,28 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
       "_id": {
         "$nin": [
           {
-            "$oid": "6ac8a4d3ae2f822d6c0686ed"
+            "$oid": "6ac8ad09a9822dfad390351b"
           },
           {
-            "$oid": "6ac8a4d3ae2f822d6c068709"
+            "$oid": "6ac8ad09a9822dfad390351f"
           },
           {
-            "$oid": "6ac8a4d3ae2f822d6c068710"
+            "$oid": "6ac8ad09a9822dfad3903535"
           },
           {
-            "$oid": "6ac8a4d3ae2f822d6c068714"
+            "$oid": "6ac8ad09a9822dfad390353e"
           },
           {
-            "$oid": "6ac8a4d3ae2f822d6c068728"
+            "$oid": "6ac8ad09a9822dfad390353f"
           },
           {
-            "$oid": "6ac8a4d4ae2f822d6c068758"
+            "$oid": "6ac8ad09a9822dfad3903545"
+          },
+          {
+            "$oid": "6ac8ad0aa9822dfad3903554"
+          },
+          {
+            "$oid": "6ac8ad0aa9822dfad3903576"
           }
         ]
       }
@@ -1082,10 +1097,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                 "$club_id",
                 [
                   {
-                    "$oid": "6ac8a4d2ae2f822d6c0686bd"
-                  },
-                  {
-                    "$oid": "6ac8a4d2ae2f822d6c0686cd"
+                    "$oid": "6ac8ad08a9822dfad3903517"
                   }
                 ]
               ]
@@ -1106,7 +1118,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                         "$subtract": [
                           "$schedule.start",
                           {
-                            "$date": "2026-10-09T08:25:04.955Z"
+                            "$date": "2026-10-09T09:00:01.636Z"
                           }
                         ]
                       },
@@ -1144,7 +1156,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                   "$gt": [
                     "$registration.deadline",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 },
@@ -1152,7 +1164,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                   "$lte": [
                     "$registration.deadline",
                     {
-                      "$date": "2026-10-14T08:25:04.955Z"
+                      "$date": "2026-10-14T09:00:01.636Z"
                     }
                   ]
                 }
@@ -1251,7 +1263,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                 "$gt": [
                   "$registration.deadline",
                   {
-                    "$date": "2026-10-09T08:25:04.955Z"
+                    "$date": "2026-10-09T09:00:01.636Z"
                   }
                 ]
               }
@@ -1261,7 +1273,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
             "$gt": [
               "$schedule.start",
               {
-                "$date": "2026-10-09T08:25:04.955Z"
+                "$date": "2026-10-09T09:00:01.636Z"
               }
             ]
           }
@@ -1287,9 +1299,9 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
 | Winning plan | `FETCH > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 27 |
-| totalKeysExamined | 37 |
-| totalDocsExamined | 37 |
+| nReturned | 15 |
+| totalKeysExamined | 26 |
+| totalDocsExamined | 26 |
 | executionTimeMillis | 0 |
 | rejected plans | 1 |
 
@@ -1311,7 +1323,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
       "cancelled_at": null,
       "schedule.start": {
         "$gt": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       },
       "$or": [
@@ -1326,7 +1338,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
         {
           "registration.deadline": {
             "$gt": {
-              "$date": "2026-10-09T08:25:04.955Z"
+              "$date": "2026-10-09T09:00:01.636Z"
             }
           }
         }
@@ -1406,7 +1418,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
                 "$gt": [
                   "$registration.deadline",
                   {
-                    "$date": "2026-10-09T08:25:04.955Z"
+                    "$date": "2026-10-09T09:00:01.636Z"
                   }
                 ]
               }
@@ -1416,7 +1428,7 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
             "$gt": [
               "$schedule.start",
               {
-                "$date": "2026-10-09T08:25:04.955Z"
+                "$date": "2026-10-09T09:00:01.636Z"
               }
             ]
           }
@@ -1447,9 +1459,9 @@ _Parameters used here:_ Saanvi Nair: interests ['dance', 'public speaking', 'mus
 | Winning plan | `FETCH > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 33 |
-| totalKeysExamined | 37 |
-| totalDocsExamined | 37 |
+| nReturned | 23 |
+| totalKeysExamined | 26 |
+| totalDocsExamined | 26 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -1473,7 +1485,7 @@ _Parameters used here:_ next-7-days range
       "cancelled_at": null,
       "schedule.start": {
         "$gte": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         },
         "$lt": {
           "$date": "2026-10-15T18:30:00Z"
@@ -1517,7 +1529,7 @@ _Parameters used here:_ next-7-days range
                 "$gt": [
                   "$registration.deadline",
                   {
-                    "$date": "2026-10-09T08:25:04.955Z"
+                    "$date": "2026-10-09T09:00:01.636Z"
                   }
                 ]
               }
@@ -1527,7 +1539,7 @@ _Parameters used here:_ next-7-days range
             "$gt": [
               "$schedule.start",
               {
-                "$date": "2026-10-09T08:25:04.955Z"
+                "$date": "2026-10-09T09:00:01.636Z"
               }
             ]
           }
@@ -1553,9 +1565,9 @@ _Parameters used here:_ next-7-days range
 | Winning plan | `SORT > FETCH > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 20 |
-| totalKeysExamined | 20 |
-| totalDocsExamined | 20 |
+| nReturned | 18 |
+| totalKeysExamined | 18 |
+| totalDocsExamined | 18 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -1578,7 +1590,7 @@ _Parameters used here:_ next-7-days range
       "featured.is_featured": true,
       "schedule.start": {
         "$gt": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       }
     }
@@ -1618,7 +1630,7 @@ _Parameters used here:_ next-7-days range
                 "$gt": [
                   "$registration.deadline",
                   {
-                    "$date": "2026-10-09T08:25:04.955Z"
+                    "$date": "2026-10-09T09:00:01.636Z"
                   }
                 ]
               }
@@ -1628,7 +1640,7 @@ _Parameters used here:_ next-7-days range
             "$gt": [
               "$schedule.start",
               {
-                "$date": "2026-10-09T08:25:04.955Z"
+                "$date": "2026-10-09T09:00:01.636Z"
               }
             ]
           }
@@ -1723,7 +1735,7 @@ db.events.find({
 ```js
 db.clubs.find({
   "admin_ids": {
-    "$oid": "6ac8a4d1ae2f822d6c068697"
+    "$oid": "6ac8ad08a9822dfad39034ec"
   }
 })
 ```
@@ -1747,7 +1759,7 @@ db.clubs.find({
 
 **Purpose.** `event_start` is a deliberate denormalised copy, so 'my upcoming saved events' is an index range scan; only the page's events are joined afterwards.
 
-_Parameters used here:_ user Saanvi Nair
+_Parameters used here:_ user Rohan Sharma
 
 <details><summary>Pipeline (6 stages, exact JSON the API runs)</summary>
 
@@ -1756,11 +1768,11 @@ _Parameters used here:_ user Saanvi Nair
   {
     "$match": {
       "user_id": {
-        "$oid": "6ac8a4d1ae2f822d6c068697"
+        "$oid": "6ac8ad08a9822dfad39034ec"
       },
       "event_start": {
         "$gte": {
-          "$date": "2026-10-09T08:25:04.955Z"
+          "$date": "2026-10-09T09:00:01.636Z"
         }
       }
     }
@@ -1810,7 +1822,7 @@ _Parameters used here:_ user Saanvi Nair
                       "$gt": [
                         "$registration.deadline",
                         {
-                          "$date": "2026-10-09T08:25:04.955Z"
+                          "$date": "2026-10-09T09:00:01.636Z"
                         }
                       ]
                     }
@@ -1820,7 +1832,7 @@ _Parameters used here:_ user Saanvi Nair
                   "$gt": [
                     "$schedule.start",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 }
@@ -1853,10 +1865,10 @@ _Parameters used here:_ user Saanvi Nair
 | Winning plan | `SORT > FETCH > IXSCAN(user_event_start)` |
 |---|---|
 | Index | **index scan** on `user_event_start` |
-| nReturned | 6 |
-| totalKeysExamined | 6 |
-| totalDocsExamined | 6 |
-| executionTimeMillis | 1 |
+| nReturned | 8 |
+| totalKeysExamined | 8 |
+| totalDocsExamined | 8 |
+| executionTimeMillis | 0 |
 | rejected plans | 1 |
 
 ### 13. Calendar month grouped by IST day
@@ -1876,7 +1888,7 @@ _Parameters used here:_ 2026-10
   {
     "$match": {
       "user_id": {
-        "$oid": "6ac8a4d1ae2f822d6c068697"
+        "$oid": "6ac8ad08a9822dfad39034ec"
       },
       "event_start": {
         "$gte": {
@@ -1927,7 +1939,7 @@ _Parameters used here:_ 2026-10
                       "$gt": [
                         "$registration.deadline",
                         {
-                          "$date": "2026-10-09T08:25:04.955Z"
+                          "$date": "2026-10-09T09:00:01.636Z"
                         }
                       ]
                     }
@@ -1937,7 +1949,7 @@ _Parameters used here:_ 2026-10
                   "$gt": [
                     "$schedule.start",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 }
@@ -1992,7 +2004,7 @@ _Parameters used here:_ 2026-10
 | nReturned | 5 |
 | totalKeysExamined | 5 |
 | totalDocsExamined | 5 |
-| executionTimeMillis | 2 |
+| executionTimeMillis | 0 |
 | rejected plans | 1 |
 
 ### 14. Comment thread (top-level + reply preview)
@@ -2003,7 +2015,7 @@ _Parameters used here:_ 2026-10
 
 **Purpose.** Pages top-level comments and attaches up to N replies plus the true reply total in one query. Threading is capped at two levels, so one `$lookup` level suffices (no recursion).
 
-_Parameters used here:_ post with 10 comments
+_Parameters used here:_ post with 9 comments
 
 <details><summary>Pipeline (6 stages, exact JSON the API runs)</summary>
 
@@ -2012,7 +2024,7 @@ _Parameters used here:_ post with 10 comments
   {
     "$match": {
       "post_id": {
-        "$oid": "6ac8a4dcae2f822d6c0694af"
+        "$oid": "6ac8ad0fa9822dfad3903c75"
       },
       "parent_id": null
     }
@@ -2076,9 +2088,9 @@ _Parameters used here:_ post with 10 comments
 | Winning plan | `SORT > FETCH > IXSCAN(post_created)` |
 |---|---|
 | Index | **index scan** on `post_created` |
-| nReturned | 6 |
-| totalKeysExamined | 10 |
-| totalDocsExamined | 10 |
+| nReturned | 8 |
+| totalKeysExamined | 9 |
+| totalDocsExamined | 9 |
 | executionTimeMillis | 1 |
 | rejected plans | 1 |
 
@@ -2102,9 +2114,9 @@ db.posts.find({
 | Winning plan | `SORT > FETCH > IXSCAN(scope_created)` |
 |---|---|
 | Index | **index scan** on `scope_created` |
-| nReturned | 8 |
-| totalKeysExamined | 8 |
-| totalDocsExamined | 8 |
+| nReturned | 5 |
+| totalKeysExamined | 5 |
+| totalDocsExamined | 5 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -2238,10 +2250,10 @@ db.posts.find({
 | Winning plan | `PROJECTION_DEFAULT > COLLSCAN` |
 |---|---|
 | Index | **no index (collection scan)** |
-| nReturned | 55 |
+| nReturned | 40 |
 | totalKeysExamined | 0 |
-| totalDocsExamined | 55 |
-| executionTimeMillis | 0 |
+| totalDocsExamined | 40 |
+| executionTimeMillis | 1 |
 | rejected plans | 0 |
 
 `COLLSCAN` is the *intended* plan here: a whole-collection rollup must read every event, so an index cannot help. It stays cheap because the counters it sums (`stats.*`) are embedded, so no `event_interactions` scan or `$lookup` is needed.
@@ -2262,7 +2274,7 @@ db.posts.find({
     "$match": {
       "ts": {
         "$gte": {
-          "$date": "2026-09-09T08:25:04.955Z"
+          "$date": "2026-09-09T09:00:01.636Z"
         }
       }
     }
@@ -2457,10 +2469,10 @@ db.posts.find({
 | Winning plan | `GROUP > GROUP > FETCH > IXSCAN(ts_ttl)` |
 |---|---|
 | Index | **index scan** on `ts_ttl` |
-| nReturned | 45 |
-| totalKeysExamined | 3000 |
-| totalDocsExamined | 3000 |
-| executionTimeMillis | 11 |
+| nReturned | 31 |
+| totalKeysExamined | 1600 |
+| totalDocsExamined | 1600 |
+| executionTimeMillis | 5 |
 | rejected plans | 0 |
 
 The `ts_ttl` index doubles as the range index for the time window. The 30-day window covers the whole 14-day seed, so every interaction is read here; on a long-lived system the window bounds the work.
@@ -2561,10 +2573,10 @@ The `ts_ttl` index doubles as the range index for the time window. The 30-day wi
 | Winning plan | `PROJECTION_DEFAULT > IXSCAN(status_start)` |
 |---|---|
 | Index | **index scan** on `status_start` |
-| nReturned | 45 |
-| totalKeysExamined | 45 |
+| nReturned | 31 |
+| totalKeysExamined | 31 |
 | totalDocsExamined | 0 |
-| executionTimeMillis | 1 |
+| executionTimeMillis | 0 |
 | rejected plans | 0 |
 
 This is a **covered query**: `status` and `schedule.start` are both in the `status_start` index, so MongoDB answers from the index alone (`totalDocsExamined` is 0).
@@ -2586,7 +2598,7 @@ _Parameters used here:_ ACM
   {
     "$match": {
       "club_id": {
-        "$oid": "6ac8a4d1ae2f822d6c0686b6"
+        "$oid": "6ac8ad08a9822dfad39034fb"
       }
     }
   },
@@ -2622,7 +2634,7 @@ _Parameters used here:_ ACM
                   "$gt": [
                     "$schedule.start",
                     {
-                      "$date": "2026-10-09T08:25:04.955Z"
+                      "$date": "2026-10-09T09:00:01.636Z"
                     }
                   ]
                 },
@@ -2683,9 +2695,9 @@ _Parameters used here:_ ACM
 | Winning plan | `PROJECTION_DEFAULT > FETCH > IXSCAN(club_start)` |
 |---|---|
 | Index | **index scan** on `club_start` |
-| nReturned | 8 |
-| totalKeysExamined | 8 |
-| totalDocsExamined | 8 |
+| nReturned | 5 |
+| totalKeysExamined | 5 |
+| totalDocsExamined | 5 |
 | executionTimeMillis | 0 |
 | rejected plans | 0 |
 
@@ -2870,30 +2882,29 @@ WriteError code 121: Document failed validation
 | `other` | `extra` |
 | `seminar` | `q_and_a_enabled`, `speaker`, `topic` |
 | `social` | `extra` |
-| `sports_match` | `format`, `match_type`, `sport`, `teams` |
 | `workshop` | `bring_own_laptop`, `duration_minutes`, `prerequisites`, `speaker`, `topics` |
 
 All eight live in `events` with no NULL columns and no per-type tables.
 
 ### GridFS: posters stored inside MongoDB
 
-41 posters → `fs.files` (metadata) + 41 `fs.chunks` (binary, 261120 bytes each). `events.poster_file_id` references the file; `GET /files/{id}` streams it with `ETag` + immutable cache headers. Replacing a poster uploads the new file first and deletes the old one afterwards.
+29 posters → `fs.files` (metadata) + 29 `fs.chunks` (binary, 261120 bytes each). `events.poster_file_id` references the file; `GET /files/{id}` streams it with `ETag` + immutable cache headers. Replacing a poster uploads the new file first and deletes the old one afterwards.
 
 ```json
 {
   "_id": {
-    "$oid": "6ac8a4d2ae2f822d6c0686d3"
+    "$oid": "6ac8ad09a9822dfad390351d"
   },
-  "filename": "poster-6ac8a4d2ae2f822d6c0686d2",
-  "length": 9683,
+  "filename": "poster-6ac8ad09a9822dfad390351c",
+  "length": 10870,
   "chunkSize": 261120,
   "uploadDate": {
-    "$date": "2026-10-09T08:24:50.670Z"
+    "$date": "2026-10-09T08:59:53.231Z"
   },
   "metadata": {
     "content_type": "image/png",
     "event_id": {
-      "$oid": "6ac8a4d2ae2f822d6c0686d2"
+      "$oid": "6ac8ad09a9822dfad390351c"
     },
     "kind": "poster"
   }

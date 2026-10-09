@@ -41,8 +41,9 @@ async def u(make_user):
 async def test_create_global_post(client, u):
     a, _ = u
     p = await post(client, a, tags=["Hello", "hello", "AI"])
-    assert p["scope"] == {"type": "global", "ref_id": None}
+    assert p["scope"] == {"type": "global", "ref_id": None, "ref_label": None}
     assert p["author_name"] == "Asha" and p["author_id"] == a.id
+    assert p["author"] == {"id": a.id, "name": "Asha"}  # the shape the frontend reads
     assert p["tags"] == ["hello", "ai"] and p["status"] == "active"
     assert (
         p["comment_count"] == 0 and p["recent_comments"] == [] and p["reaction_counts"] == {"like": 0, "insightful": 0}
@@ -86,6 +87,7 @@ async def test_event_and_club_scopes(client, make_club, make_doc, freeze, u):
     cp = await post(client, a, "On club", scope={"type": "club", "ref_id": club["id"]})
     gp = await post(client, b, "Global")
     assert ep["scope"]["ref_id"] == str(ev["_id"])
+    assert ep["scope"]["ref_label"] == ev["title"] and cp["scope"]["ref_label"] == "ACM"  # shown on feed cards
 
     # cannot post under a non-public event, an unverified club, or something that doesn't exist
     for scope in (
@@ -174,7 +176,7 @@ async def test_reply_limit_param_and_pagination(client, u):
     none = (await client.get(f"/posts/{p['id']}/comments?replies=0")).json()["items"][0]
     assert none["replies"] == [] and none["reply_count"] == 4
     assert (await client.get(f"/posts/{p['id']}/comments?page=2&page_size=2")).json()["items"][0]["body"] == "top 2"
-    assert (await client.get(f"/posts/{p['id']}/comments?replies=21")).status_code == 422
+    assert (await client.get(f"/posts/{p['id']}/comments?replies=201")).status_code == 422
 
 
 async def test_comment_errors(client, u, db):
@@ -384,3 +386,31 @@ async def test_removed_posts_excluded_from_search(client, u):
     assert (await client.get("/posts?q=zebra")).json()["total"] == 1
     await client.delete(f"/posts/{p['id']}", headers=a.headers)
     assert (await client.get("/posts?q=zebra")).json()["total"] == 0
+
+
+async def test_frontend_contract_author_labels_and_full_tree(client, make_club, make_doc, freeze, u):
+    freeze()
+    a, b = u
+    club, _ = await make_club("ACM")
+    ev = await make_doc(club, NOW + timedelta(days=3), title="HackMUJ")
+    p = await post(client, a, "Q", scope={"type": "event", "ref_id": str(ev["_id"])})
+    top = await comment(client, a, p["id"], "top")
+    for i in range(7):  # more replies than the old default preview of 3
+        await comment(client, b, p["id"], f"r{i}", parent_id=top["id"])
+    # feed: labels resolved in batch, author objects on posts AND on the embedded recent comments
+    feed = (await client.get("/posts")).json()["items"][0]
+    assert feed["scope"] == {"type": "event", "ref_id": str(ev["_id"]), "ref_label": "HackMUJ"}
+    assert feed["author"] == {"id": a.id, "name": "Asha"}
+    assert [c["author"]["name"] for c in feed["recent_comments"]] == ["Ben", "Ben", "Ben"]
+    assert all(c["author"]["id"] == b.id for c in feed["recent_comments"])
+    # thread: the whole two-level tree comes back with no query params (the adapter sends only page_size)
+    thread = (await client.get(f"/posts/{p['id']}/comments?page_size=50")).json()["items"][0]
+    assert (
+        thread["author"] == {"id": a.id, "name": "Asha"} and len(thread["replies"]) == 7 and thread["reply_count"] == 7
+    )
+    assert all(r["author"]["name"] == "Ben" for r in thread["replies"])
+    # a removed comment keeps its place with a placeholder author
+    await client.delete(f"/comments/{top['id']}", headers=a.headers)
+    gone = (await client.get(f"/posts/{p['id']}/comments")).json()["items"][0]
+    assert gone["status"] == "removed" and gone["body"] == "[removed]" and gone["author"]["name"] == "Removed"
+    assert len(gone["replies"]) == 7  # replies survive

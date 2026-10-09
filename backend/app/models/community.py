@@ -75,10 +75,22 @@ class ReactionOut(BaseModel):
     reaction_counts: dict[str, int]
 
 
+class Author(BaseModel):
+    id: str
+    name: str
+
+
+class PostScopeOut(BaseModel):
+    type: ScopeType
+    ref_id: str | None
+    ref_label: str | None = None  # the event title or club name, so a feed card can say where the post lives
+
+
 class CommentSnapshot(BaseModel):
     """Subset pattern: the last 3 comments embedded in the post so the feed needs no second query."""
 
     id: str
+    author: Author
     author_name: str
     body: str
     parent_id: str | None
@@ -87,7 +99,8 @@ class CommentSnapshot(BaseModel):
 
 class PostOut(BaseModel):
     id: str
-    scope: PostScope
+    scope: PostScopeOut
+    author: Author
     author_id: str
     author_name: str
     title: str
@@ -107,6 +120,7 @@ class ReplyOut(BaseModel):
     id: str
     post_id: str
     parent_id: str | None
+    author: Author  # a placeholder author for removed comments
     author_id: str | None  # null for removed comments
     author_name: str | None
     body: str  # "[removed]" for removed comments, so threads keep their shape

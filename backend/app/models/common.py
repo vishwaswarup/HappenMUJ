@@ -44,6 +44,17 @@ class PageParams:
         return (self.page - 1) * self.page_size
 
 
+class BigPageParams(PageParams):
+    """For lists the UI needs in full (e.g. all saved events for the calendar): default 200, max 200."""
+
+    def __init__(
+        self,
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=200)] = 200,
+    ):
+        super().__init__(page=page, page_size=page_size)
+
+
 def to_oid(value: str, what: str = "id") -> ObjectId:
     try:
         return ObjectId(value)

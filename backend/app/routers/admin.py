@@ -14,7 +14,7 @@ from app.services import community as community_svc
 from app.services import events as events_svc
 from app.services import users as users_svc
 from app.services.event_view import to_detail
-from app.services.serializers import club_out, user_out
+from app.services.serializers import club_out, present_user, present_users
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 _errors = {401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}}
@@ -65,12 +65,12 @@ async def list_users(
     role: Literal["student", "club_admin", "platform_admin"] | None = None,
 ) -> Page[UserOut]:
     items, total = await users_svc.list_users(db, pp.skip, pp.page_size, role)
-    return Page(items=[user_out(u) for u in items], total=total, page=pp.page, page_size=pp.page_size)
+    return Page(items=await present_users(db, items), total=total, page=pp.page, page_size=pp.page_size)
 
 
 @router.patch("/users/{user_id}/role", response_model=UserOut, responses=_errors, summary="Change a user's role")
 async def change_role(user_id: str, body: RoleChange, db: DB, admin: PlatformAdmin) -> UserOut:
-    return user_out(await users_svc.set_role(db, admin["_id"], to_oid(user_id, "user id"), body.role))
+    return await present_user(db, await users_svc.set_role(db, admin["_id"], to_oid(user_id, "user id"), body.role))
 
 
 # ---- event moderation

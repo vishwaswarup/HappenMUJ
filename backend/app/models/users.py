@@ -12,6 +12,7 @@ class RegisterIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    interests: list[str] = Field(default=[], max_length=50)
 
     model_config = {
         "json_schema_extra": {
@@ -37,6 +38,7 @@ class UserOut(BaseModel):
     interests: list[str]
     preferred_categories: list[str]
     followed_club_ids: list[str]
+    managed_club_ids: list[str] = []  # clubs whose admin_ids contain this user
     created_at: datetime
 
     model_config = {

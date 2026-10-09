@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "build:artifact": "vite build --config vite.artifact.config.ts && node scripts/assemble-artifact.mjs"
   },
   "dependencies": {

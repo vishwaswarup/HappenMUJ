@@ -24,7 +24,7 @@ async def register(db: AsyncDatabase, data: RegisterIn) -> dict:
         "email": email,
         "password_hash": hash_password(data.password),
         "role": "student",
-        "interests": [],
+        "interests": normalize_terms(data.interests),
         "preferred_categories": [],
         "followed_club_ids": [],
         "created_at": timeutil.now(),

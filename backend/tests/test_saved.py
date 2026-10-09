@@ -342,7 +342,7 @@ async def test_saving_feeds_top_events_ranking(client, freeze, make_club, make_d
     await save(client, users[0], a["_id"])
     items = (await client.get("/home/top-events")).json()["items"]
     assert [i["title"] for i in items] == ["B", "A"]
-    assert items[0]["score_breakdown"]["components"]["saves"] == 1.0
+    assert items[0]["components"]["saves"] == 1.0
     # unsaving takes the engagement back out
     for u in users:
         await client.delete(f"/saved-events/{b['_id']}", headers=u.headers)

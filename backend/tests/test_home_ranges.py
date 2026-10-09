@@ -76,7 +76,7 @@ async def test_card_shape(client, freeze, make_club, make_doc):
     card = (await client.get("/home/tomorrow")).json()["items"][0]
     assert set(card) == {
         "id", "title", "one_liner", "club", "category", "event_type", "tags", "poster_url", "schedule",
-        "venue", "fee", "team", "registration", "registration_open", "featured", "stats", "is_saved",
+        "venue", "fee", "team", "registration", "registration_open", "featured", "status", "stats", "is_saved",
     }  # fmt: skip
     assert card["fee"]["display"] == "Fee not specified" and card["is_saved"] is None
     assert "description" not in card and "url" not in card["registration"]

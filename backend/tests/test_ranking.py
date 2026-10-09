@@ -67,7 +67,7 @@ async def test_old_engagement_does_not_dominate(client, freeze, make_club, make_
         await interactions(fresh, kind, NOW - timedelta(days=1), 3)
     body = await top(client)
     assert names(body) == ["fresh", "old-hit"]
-    assert body["items"][1]["score_breakdown"]["components"]["saves"] == 0
+    assert body["items"][1]["components"]["saves"] == 0
 
 
 async def test_score_formula_and_breakdown(client, freeze, make_club, make_doc, interactions):
@@ -85,16 +85,20 @@ async def test_score_formula_and_breakdown(client, freeze, make_club, make_doc, 
     await interactions(b, "registration_click", NOW - timedelta(days=2), 3)
     body = await top(client)
     by = {i["title"]: i for i in body["items"]}
-    ca, cb = by["A"]["score_breakdown"]["components"], by["B"]["score_breakdown"]["components"]
+    ca, cb = by["A"]["components"], by["B"]["components"]
     assert ca["saves"] == 1.0 and cb["saves"] == 0.5
     assert ca["views"] == 0.5 and cb["views"] == 1.0
-    assert ca["clicks"] == 0.0 and cb["clicks"] == 1.0
+    assert ca["registration_clicks"] == 0.0 and cb["registration_clicks"] == 1.0
     assert abs(ca["proximity"] - 0.3679) < 1e-3  # exp(-7/7)
     assert ca["urgency"] == 0.5 and cb["urgency"] == 1.0  # B's deadline is within 72h
     expected_a = 0.30 * 1.0 + 0.20 * 0.5 + 0.20 * 0 + 0.20 * 0.3679 + 0.10 * 0.5
     assert abs(by["A"]["score"] - expected_a) < 1e-3
-    for it in body["items"]:  # contributions sum to the score
-        assert abs(sum(it["score_breakdown"]["contributions"].values()) - it["score"]) < 1e-3
+    for it in body["items"]:  # the flat score_breakdown (weighted terms) sums to the score
+        assert abs(sum(it["score_breakdown"].values()) - it["score"]) < 1e-3
+        assert set(it["score_breakdown"]) == {"saves", "views", "registration_clicks", "proximity", "urgency"}
+    # per-item engagement inside the ranking window, as the frontend's RankedEvent expects
+    assert by["A"]["window"] == {"saves": 10, "views": 2, "registration_clicks": 0}
+    assert by["B"]["window"] == {"saves": 5, "views": 4, "registration_clicks": 3}
     assert "not an official endorsement" in body["disclaimer"]
     assert body["window_days"] == 7
 
@@ -115,7 +119,7 @@ async def test_weights_are_read_from_settings(client, freeze, make_club, make_do
     await interactions(popular_far, "save", NOW - timedelta(days=1), 50)
     await db.settings.update_one(
         {"_id": "ranking"},
-        {"$set": {"weights": {"saves": 0.0, "views": 0.0, "clicks": 0.0, "proximity": 1.0, "urgency": 0.0}, "window_days": 7}},
+        {"$set": {"weights": {"saves": 0.0, "views": 0.0, "registration_clicks": 0.0, "proximity": 1.0, "urgency": 0.0}, "window_days": 7}},
         upsert=True,
     )  # fmt: skip
     assert names(await top(client)) == ["quiet-near", "popular-far"]
@@ -131,9 +135,9 @@ async def test_window_days_setting(client, freeze, make_club, make_doc, interact
     club, _ = await make_club("ACM")
     e = await make_doc(club, S(3), title="e")
     await interactions(e, "save", NOW - timedelta(days=10), 5)
-    assert (await top(client))["items"][0]["score_breakdown"]["components"]["saves"] == 0
+    assert (await top(client))["items"][0]["components"]["saves"] == 0
     await db.settings.update_one({"_id": "ranking"}, {"$set": {"window_days": 14}}, upsert=True)
-    assert (await top(client))["items"][0]["score_breakdown"]["components"]["saves"] == 1.0
+    assert (await top(client))["items"][0]["components"]["saves"] == 1.0
 
 
 # ---------------------------------------------------------------- suggested
@@ -159,9 +163,9 @@ async def test_suggested_scoring(client, freeze, make_club, make_doc, make_user)
     one_tag = await make_doc(acm, S(5), title="one-tag", tags=["ai", "music"], category="sports")
     nothing = await make_doc(acm, S(5), title="nothing", tags=["music"], category="sports")
     body = await sug(client, u.headers)
-    assert body["personalized"] is True
+    assert body["personalised"] is True
     assert names(body) == ["ai+cat", "club", "one-tag", "nothing"]
-    by = {i["title"]: i["score_breakdown"]["components"] for i in body["items"]}
+    by = {i["title"]: i["components"] for i in body["items"]}
     assert by["ai+cat"]["interest"] == 1.0 and by["ai+cat"]["category"] == 1 and by["ai+cat"]["club"] == 0
     assert by["one-tag"]["interest"] == 0.5
     assert by["club"]["club"] == 1
@@ -178,7 +182,7 @@ async def test_suggested_interest_match_is_case_insensitive(client, freeze, make
 
     await dbm.get_db().events.update_one({"title": "ml"}, {"$set": {"tags": ["machine learning"]}})
     body = await sug(client, u.headers)
-    assert body["items"][0]["score_breakdown"]["components"]["interest"] == 1.0
+    assert body["items"][0]["components"]["interest"] == 1.0
 
 
 async def test_suggested_excludes_saved_and_ineligible(client, freeze, make_club, make_doc, make_user, db):
@@ -221,7 +225,7 @@ async def test_suggested_deadline_and_date_terms(client, freeze, make_club, make
         registration={"required": True, "platform": "other", "url": "https://x.example.com", "deadline": S(8)},
     )  # fmt: skip
     body = await sug(client, u.headers)
-    comps = {i["title"]: i["score_breakdown"]["components"] for i in body["items"]}
+    comps = {i["title"]: i["components"] for i in body["items"]}
     assert comps["urgent"]["deadline"] == 1 and comps["relaxed"]["deadline"] == 0
     assert abs(comps["urgent"]["date"] - 0.3679) < 1e-3  # exp(-10/10)
     assert names(body)[0] == "urgent" and urgent and relaxed
@@ -234,10 +238,10 @@ async def test_suggested_falls_back_to_popularity(client, freeze, make_club, mak
     await make_doc(club, S(5), title="hot", stats={"views": 9, "saves": 30, "registration_clicks": 4})
     await make_doc(club, S(-1), title="past", stats={"views": 999, "saves": 999, "registration_clicks": 999})
     anon = await sug(client)
-    assert anon["personalized"] is False and names(anon) == ["hot", "meh"]
+    assert anon["personalised"] is False and names(anon) == ["hot", "meh"]
     u = await make_user()  # logged in but no interests/categories/follows
     body = await sug(client, u.headers)
-    assert body["personalized"] is False and names(body) == ["hot", "meh"]
+    assert body["personalised"] is False and names(body) == ["hot", "meh"]
     assert body["items"][0]["is_saved"] is False
 
 
@@ -257,8 +261,8 @@ async def test_featured_prefers_most_recent_feature(client, freeze, make_club, m
             {"_id": e["_id"]}, {"$set": {"featured.featured_at": NOW - timedelta(minutes=minutes)}}
         )
     body = (await client.get("/home/featured")).json()
-    assert body["source"] == "featured" and body["event"]["title"] == "b"  # b featured more recently
-    assert body["event"]["featured"] is True
+    assert body["source"] == "featured" and body["title"] == "b"  # b featured more recently
+    assert body["featured"] is True and body["status"] == "published"
 
 
 async def test_featured_ignores_past_and_nonpublic_then_falls_back(client, freeze, make_club, make_doc, db):
@@ -274,10 +278,11 @@ async def test_featured_ignores_past_and_nonpublic_then_falls_back(client, freez
     await make_doc(club, S(7), title="soonest with poster + open reg", poster_file_id=poster)
     body = (await client.get("/home/featured")).json()
     assert body["source"] == "fallback"
-    assert body["event"]["title"] == "soonest with poster + open reg"
-    assert body["event"]["poster_url"] == f"/api/v1/files/{poster}"
+    assert body["title"] == "soonest with poster + open reg"
+    assert body["poster_url"] == f"/api/v1/files/{poster}"
 
 
 async def test_featured_none_when_nothing(client, freeze):
     freeze()
-    assert (await client.get("/home/featured")).json() == {"source": "none", "event": None}
+    r = await client.get("/home/featured")
+    assert r.status_code == 200 and r.json() is None  # a JSON null, which the frontend maps to "no featured event"

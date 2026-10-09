@@ -74,6 +74,23 @@ def next_7_days_range(now: datetime) -> tuple[datetime, datetime]:
     return ensure_utc(now), ist_day_range(ist_date(now) + timedelta(days=7))[0]
 
 
+def parse_bound(value: str, *, upper: bool) -> datetime:
+    """A catalogue range bound: a full ISO-8601 instant with an offset (what the frontend sends), or a plain
+    'YYYY-MM-DD' meaning that whole IST day (lower bound = its start, upper bound = the start of the next day)."""
+    v = value.strip()
+    if len(v) == 10:
+        try:
+            d = date.fromisoformat(v)
+        except ValueError:
+            raise ValueError(f"invalid date: {value!r}") from None
+        start, end = ist_day_range(d)
+        return end if upper else start
+    try:
+        return ensure_utc(datetime.fromisoformat(v))
+    except ValueError as e:
+        raise ValueError(f"{value!r} is not an ISO-8601 datetime with an offset: {e}") from None
+
+
 def month_range(year: int, month: int) -> tuple[datetime, datetime]:
     """[00:00 IST on the 1st, 00:00 IST on the 1st of the next month) in UTC."""
     monthrange(year, month)  # validates 1 <= month <= 12

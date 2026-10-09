@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
@@ -39,8 +38,12 @@ async def catalogue(
     q: Annotated[str | None, Query(min_length=1, max_length=100, description="Weighted full-text search")] = None,
     category: Annotated[list[str] | None, Query(description="Repeatable; OR within the group")] = None,
     club: Annotated[list[str] | None, Query(description="Repeatable club id or slug; OR within the group")] = None,
-    date_from: Annotated[date | None, Query(description="IST calendar date, inclusive")] = None,
-    date_to: Annotated[date | None, Query(description="IST calendar date, inclusive")] = None,
+    date_from: Annotated[
+        str | None, Query(description="Start of window, inclusive: ISO-8601 instant, or YYYY-MM-DD (IST day start)")
+    ] = None,
+    date_to: Annotated[
+        str | None, Query(description="End of window, exclusive: ISO-8601 instant, or YYYY-MM-DD (end of that IST day)")
+    ] = None,
     sort: Literal["date", "popularity", "relevance"] | None = None,
 ) -> CataloguePage:
     now = timeutil.now()

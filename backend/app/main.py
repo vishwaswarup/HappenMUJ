@@ -13,6 +13,7 @@ from app.services.users import bootstrap_platform_admin
 from app.validators import apply_validators
 
 API_PREFIX = "/api/v1"
+API_ALIAS_PREFIX = "/api"  # the frontend calls /api/...; same routes, hidden from the OpenAPI schema
 ROUTERS = (
     auth.router,
     users.router,
@@ -66,6 +67,10 @@ def create_app() -> FastAPI:
     for r in ROUTERS:
         api.include_router(r)
     app.include_router(api)
+    alias = APIRouter(prefix=API_ALIAS_PREFIX)
+    for r in ROUTERS:
+        alias.include_router(r)
+    app.include_router(alias, include_in_schema=False)
 
     @app.get("/health", tags=["meta"], summary="Liveness + MongoDB connectivity")
     async def health() -> dict:

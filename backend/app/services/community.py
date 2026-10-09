@@ -15,12 +15,14 @@ from app.core import timeutil
 from app.core.errors import AppError, forbidden, not_found
 from app.models.common import SCHEMA_VERSION, to_oid
 from app.models.community import (
+    Author,
     CommentCreate,
     CommentOut,
     CommentSnapshot,
     PostCreate,
     PostOut,
     PostScope,
+    PostScopeOut,
     ReactionOut,
     ReplyOut,
 )
@@ -104,6 +106,7 @@ async def list_posts(
 def _snapshot(c: dict) -> dict:
     return {
         "id": c["_id"],
+        "author_id": c["author_id"],
         "author_name": c["author_snapshot"]["name"],
         "body": c["body"][:SNAPSHOT_BODY_CHARS],
         "parent_id": c["parent_id"],
@@ -315,17 +318,25 @@ async def my_reactions(
 
 
 # ------------------------------------------------------------------ serialisation
-def post_out(p: dict, mine: str | None) -> PostOut:
+def post_out(p: dict, mine: str | None, labels: dict[ObjectId, str] | None = None) -> PostOut:
+    ref = p["scope"]["ref_id"]
     return PostOut(
         id=str(p["_id"]),
-        scope=PostScope(type=p["scope"]["type"], ref_id=str(p["scope"]["ref_id"]) if p["scope"]["ref_id"] else None),
+        scope=PostScopeOut(
+            type=p["scope"]["type"],
+            ref_id=str(ref) if ref else None,
+            ref_label=(labels or {}).get(ref) if ref else None,
+        ),
+        author=Author(id=str(p["author_id"]), name=p["author_snapshot"]["name"]),
         author_id=str(p["author_id"]),
         author_name=p["author_snapshot"]["name"],
         title=p["title"], body=p["body"], tags=p.get("tags", []),
         comment_count=p["comment_count"], reaction_counts=p["reaction_counts"],
         recent_comments=[
             CommentSnapshot(
-                id=str(c["id"]), author_name=c["author_name"], body=c["body"],
+                id=str(c["id"]),
+                author=Author(id=str(c.get("author_id", "")), name=c["author_name"]),
+                author_name=c["author_name"], body=c["body"],
                 parent_id=str(c["parent_id"]) if c["parent_id"] else None, created_at=c["created_at"],
             )
             for c in p.get("recent_comments", [])
@@ -340,6 +351,11 @@ def reply_out(c: dict, mine: str | None) -> ReplyOut:
     return ReplyOut(
         id=str(c["_id"]), post_id=str(c["post_id"]),
         parent_id=str(c["parent_id"]) if c["parent_id"] else None,
+        author=(
+            Author(id="", name="Removed")
+            if removed
+            else Author(id=str(c["author_id"]), name=c["author_snapshot"]["name"])
+        ),
         author_id=None if removed else str(c["author_id"]),
         author_name=None if removed else c["author_snapshot"]["name"],
         body=REMOVED_TEXT if removed else c["body"], status=c["status"],
@@ -362,6 +378,21 @@ async def comments_out(db: AsyncDatabase, user: dict | None, rows: list[dict]) -
     return [comment_out(r, rmap) for r in rows]
 
 
+async def scope_labels(db: AsyncDatabase, posts: list[dict]) -> dict[ObjectId, str]:
+    """Event titles / club names for the posts' scopes, two queries total (not one per post)."""
+    events = {p["scope"]["ref_id"] for p in posts if p["scope"]["type"] == "event" and p["scope"]["ref_id"]}
+    clubs = {p["scope"]["ref_id"] for p in posts if p["scope"]["type"] == "club" and p["scope"]["ref_id"]}
+    labels: dict[ObjectId, str] = {}
+    if events:
+        async for e in db.events.find({"_id": {"$in": list(events)}}, {"title": 1}):
+            labels[e["_id"]] = e["title"]
+    if clubs:
+        async for c in db.clubs.find({"_id": {"$in": list(clubs)}}, {"name": 1}):
+            labels[c["_id"]] = c["name"]
+    return labels
+
+
 async def posts_out(db: AsyncDatabase, user: dict | None, posts: list[dict]) -> list[PostOut]:
     rmap = await my_reactions(db, user, "post", [p["_id"] for p in posts])
-    return [post_out(p, rmap.get(p["_id"])) for p in posts]
+    labels = await scope_labels(db, posts)
+    return [post_out(p, rmap.get(p["_id"]), labels) for p in posts]

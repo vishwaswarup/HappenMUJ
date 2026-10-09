@@ -62,18 +62,18 @@ async def test_club_filter_accepts_id_or_slug(client, freeze, make_club, make_do
 
 
 async def test_facets_are_disjunctive_and_scoped(client, freeze, make_club, make_doc):
-    await setup_grid(client, freeze, make_club, make_doc)
+    acm, ieee, lit = await setup_grid(client, freeze, make_club, make_doc)
     body = await get(client, category=["technical"], club=["acm"])
     assert titles(body) == ["acm-tech"]
-    cats = {f["value"]: f["count"] for f in body["facets"]["categories"]}
-    clubs = {f["slug"]: f["count"] for f in body["facets"]["clubs"]}
+    # the frontend contract: facets = {category: {id: count}, club: {club id: count}}
+    assert set(body["facets"]) == {"category", "club"}
     # category counts ignore the category filter but respect the club filter (acm only)
-    assert cats == {"technical": 1, "hackathon": 1, "cultural": 1}
-    # club counts ignore the club filter but respect the category filter (technical only)
-    assert clubs == {"acm": 1, "ieee": 1, "litmus": 1}
+    assert body["facets"]["category"] == {"technical": 1, "hackathon": 1, "cultural": 1}
+    # club counts ignore the club filter but respect the category filter (technical only), keyed by club id
+    assert body["facets"]["club"] == {acm["id"]: 1, ieee["id"]: 1, lit["id"]: 1}
     # unfiltered: counts add up to total
     allb = await get(client)
-    assert sum(f["count"] for f in allb["facets"]["categories"]) == allb["total"] == 8
+    assert sum(allb["facets"]["category"].values()) == sum(allb["facets"]["club"].values()) == allb["total"] == 8
 
 
 async def test_pagination_total_and_page_size_cap(client, freeze, make_club, make_doc):
@@ -93,17 +93,45 @@ async def test_only_public_events_in_catalogue(client, freeze, make_club, make_d
         await make_doc(club, S(12), title=st, status=st)
     body = await get(client)
     assert titles(body) == ["visible"]
-    assert all(f["count"] == 1 for f in body["facets"]["categories"])
+    assert list(body["facets"]["category"].values()) == [1]
 
 
-async def test_default_hides_completed_but_date_range_shows_past(client, freeze, make_club, make_doc):
+async def test_only_upcoming_events_even_with_a_date_window(client, freeze, make_club, make_doc):
+    """Frontend contract: the catalogue is published AND upcoming (start > now), always."""
     freeze()
     club, _ = await make_club("ACM")
     await make_doc(club, utc(2026, 10, 1, 6), title="past")
-    await make_doc(club, utc(2026, 10, 9, 5, 0), hours=3, title="ongoing")  # ends 08:00 UTC > now 06:30
+    await make_doc(club, utc(2026, 10, 9, 5, 0), hours=3, title="already started")  # started before now (06:30 UTC)
     await make_doc(club, S(12), title="future")
-    assert titles(await get(client)) == ["ongoing", "future"]
-    assert titles(await get(client, date_from="2026-10-01", date_to="2026-10-02")) == ["past"]
+    assert titles(await get(client)) == ["future"]
+    assert (await get(client, date_from="2026-10-01", date_to="2026-10-02"))[
+        "total"
+    ] == 0  # a window cannot resurrect the past
+
+
+async def test_date_window_accepts_iso_instants_half_open(client, freeze, make_club, make_doc):
+    """The frontend sends from.toISOString() / to.toISOString(): inclusive lower bound, exclusive upper bound."""
+    freeze()
+    club, _ = await make_club("ACM")
+    # IST day 2026-10-13 = [2026-10-12T18:30Z, 2026-10-13T18:30Z)
+    for title, start in {
+        "before": utc(2026, 10, 12, 18, 29),
+        "first instant": utc(2026, 10, 12, 18, 30),
+        "last minute": utc(2026, 10, 13, 18, 29),
+        "next day": utc(2026, 10, 13, 18, 30),
+    }.items():
+        await make_doc(club, start, title=title)
+    got = await get(client, date_from="2026-10-12T18:30:00.000Z", date_to="2026-10-13T18:30:00.000Z")
+    assert titles(got) == ["first instant", "last minute"]
+    # offsets are honoured too
+    got = await get(client, date_from="2026-10-13T00:00:00+05:30", date_to="2026-10-14T00:00:00+05:30")
+    assert titles(got) == ["first instant", "last minute"]
+    for bad in (
+        {"date_from": "yesterday"},
+        {"date_from": "2026-10-13T10:00:00"},
+        {"date_from": "2026-10-14", "date_to": "2026-10-13"},
+    ):
+        assert (await client.get("/events", params=bad)).status_code == 422, bad
 
 
 async def test_date_filters_use_ist_days_inclusive(client, freeze, make_club, make_doc):
@@ -164,7 +192,7 @@ async def test_search_facets_scoped_to_matches(client, freeze, make_club, make_d
     await make_doc(club, S(11), title="Python for artists", category="cultural")
     await make_doc(club, S(12), title="Dance", category="cultural")
     body = await get(client, q="python")
-    assert {f["value"]: f["count"] for f in body["facets"]["categories"]} == {"technical": 1, "cultural": 1}
+    assert body["facets"]["category"] == {"technical": 1, "cultural": 1}
 
 
 async def test_invalid_category_filter(client):

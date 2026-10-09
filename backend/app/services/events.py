@@ -12,7 +12,6 @@ from app.core.errors import AppError, bad_request, forbidden, not_found
 from app.models.common import SCHEMA_VERSION, to_oid
 from app.models.events import EVENT_FIELDS, EventCreate, EventInput, EventPatch
 from app.services import files
-from app.services.visibility import public_filter
 
 EDITABLE_STATUSES = ("draft", "pending_review", "rejected", "published")
 
@@ -23,7 +22,8 @@ def invalid_state(action: str, status: str) -> AppError:
 
 def _fields_from_input(inp: EventInput) -> dict[str, Any]:
     out = inp.model_dump(mode="python", exclude={"details"})
-    out["details"] = inp.details.model_dump(exclude={"event_type"}) if inp.details else {}
+    # Free-form bag: store exactly the keys the client sent (no model defaults injected into nested objects).
+    out["details"] = inp.details.model_dump(exclude={"event_type"}, exclude_unset=True) if inp.details else {}
     return out
 
 
@@ -75,9 +75,10 @@ async def can_manage(db: AsyncDatabase, user: dict | None, event: dict) -> bool:
 
 
 async def get_visible_event(db: AsyncDatabase, user: dict | None, event_id: ObjectId) -> dict:
-    """Public if published; otherwise only its club admins / platform admins (any state)."""
+    """Readable by id if published OR cancelled (a saved/shared link to a cancelled event must still
+    explain what happened). Draft, pending and rejected events: only their club admins / platform admins."""
     event = await get_event(db, event_id)
-    if await db.events.count_documents(public_filter(_id=event_id), limit=1):
+    if event["status"] in ("published", "cancelled"):
         return event
     if await can_manage(db, user, event):
         return event
@@ -114,8 +115,12 @@ async def update_event(db: AsyncDatabase, user: dict, event_id: ObjectId, patch:
     if event["status"] not in EDITABLE_STATUSES:
         raise invalid_state("edit", event["status"])
 
+    changes = patch.model_dump(exclude_unset=True)
+    club_id = changes.pop("club_id", None)
+    if club_id is not None and to_oid(club_id, "club id") != event["club_id"]:
+        raise AppError(409, "club_change_not_allowed", "An event cannot be moved to another club")
     current = {k: event.get(k) for k in EVENT_FIELDS}
-    merged = {**current, **patch.model_dump(exclude_unset=True)}
+    merged = {**current, **changes}
     try:
         new_fields = _fields_from_input(EventInput.model_validate(merged))  # re-validate the whole event
     except ValidationError as e:

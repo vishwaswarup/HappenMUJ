@@ -192,7 +192,7 @@ counts, harder per-user de-duplication) outweighs the benefit at this scale.
 * **Validation lives in two places.** Pydantic (rich, per-type rules) and `$jsonSchema` (common fields, a safety
   net against bad writes that bypass the API). That is intentional, but it is two things to keep in step.
 * **Subset maintenance.** `recent_comments` makes the feed fast and makes comment removal more complex.
-* **Small-data caveat.** With 55 events the planner's timings are ~1 ms with or without an index; the evidence for
+* **Small-data caveat.** With about 40 events the planner's timings are ~1 ms with or without an index; the evidence for
   index use is the keys/docs-examined numbers in `docs/AGGREGATION_SHOWCASE.md`, not wall-clock time. One index
   (`category_start`) is required by the spec but the planner currently prefers `status_start` for the catalogue;
   it is a candidate to drop if write cost mattered.

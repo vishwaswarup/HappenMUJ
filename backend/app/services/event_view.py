@@ -20,8 +20,26 @@ from app.models.events import (
 )
 
 
+def _indian_group(n: int) -> str:
+    """12345678 -> '1,23,45,678' (what toLocaleString('en-IN') produces)."""
+    s = str(abs(n))
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        s = ",".join([*parts, tail])
+    return ("-" if n < 0 else "") + s
+
+
 def _money(amount: float) -> str:
-    return f"Rs {int(amount)}" if float(amount).is_integer() else f"Rs {amount:.2f}"
+    if float(amount).is_integer():
+        return f"₹{_indian_group(int(amount))}"
+    whole, frac = f"{amount:.2f}".split(".")
+    return f"₹{_indian_group(int(whole))}.{frac.rstrip('0')}"
 
 
 def fee_display(fee: dict) -> str:
@@ -42,11 +60,11 @@ def team_display(team: dict) -> str:
     if t == "individual":
         return "Individual"
     if t == "range":
-        return f"{lo}-{hi} members"
+        return f"{lo}–{hi} members"
     if t == "fixed":
         return f"Exactly {lo} members"
     if t == "not_applicable":
-        return "Not applicable"
+        return "No team format"
     return "Team size not specified"
 
 
@@ -91,6 +109,7 @@ def to_card(doc: dict, now: datetime, is_saved: bool | None = None) -> EventCard
         ),
         registration_open=open_,
         featured=bool(doc.get("featured", {}).get("is_featured")),
+        status=doc.get("status", "published"),
         stats=StatsCard(saves=stats.get("saves", 0), views=stats.get("views", 0)),
         is_saved=is_saved,
     )  # fmt: skip
@@ -107,7 +126,6 @@ def to_detail(doc: dict, now: datetime, is_saved: bool | None = None) -> EventDe
         description=doc.get("description", ""),
         details=doc.get("details", {}),
         contact=Contact(**doc["contact"]) if doc.get("contact") else None,
-        status=doc["status"],
         cancelled=doc["status"] == "cancelled",
         completed=doc["schedule"]["end"] < now,
         rejection_reason=doc.get("rejection_reason"),
