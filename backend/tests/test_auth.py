@@ -4,11 +4,16 @@ from app.config import get_settings
 
 
 async def test_register_login_me(client):
-    r = await client.post("/auth/register", json={"name": "A", "email": "A@Example.com", "password": "password123"})
+    r = await client.post(
+        "/auth/register",
+        json={"name": "A", "email": "A@Example.com", "password": "password123"},
+    )
     assert r.status_code == 201
     assert r.json()["user"]["email"] == "a@example.com"
     assert r.json()["user"]["role"] == "student"
-    assert "password" not in r.text
+    assert (
+        "password123" not in r.text and "password_hash" not in r.text and "argon2" not in r.text
+    )  # no password material
     r = await client.post("/auth/login", json={"email": "a@example.com", "password": "password123"})
     token = r.json()["access_token"]
     me = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
@@ -16,7 +21,10 @@ async def test_register_login_me(client):
 
 
 async def test_password_is_argon2_hashed(client, db):
-    await client.post("/auth/register", json={"name": "A", "email": "a@example.com", "password": "password123"})
+    await client.post(
+        "/auth/register",
+        json={"name": "A", "email": "a@example.com", "password": "password123"},
+    )
     u = await db.users.find_one({"email": "a@example.com"})
     assert u["password_hash"].startswith("$argon2")
     assert u["schema_v"] == 1
@@ -25,7 +33,13 @@ async def test_password_is_argon2_hashed(client, db):
 async def test_duplicate_email_conflict(client):
     body = {"name": "A", "email": "a@example.com", "password": "password123"}
     await client.post("/auth/register", json=body)
-    r = await client.post("/auth/register", json={**body, "email": "A@example.com"})
+    r = await client.post(
+        "/auth/register",
+        json={
+            **body,
+            "email": "A@example.com",
+        },
+    )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "email_taken"
 
@@ -40,7 +54,10 @@ async def test_wrong_password_and_unknown_user(client, make_user):
 
 
 async def test_short_password_validation_error_shape(client):
-    r = await client.post("/auth/register", json={"name": "A", "email": "a@example.com", "password": "short"})
+    r = await client.post(
+        "/auth/register",
+        json={"name": "A", "email": "a@example.com", "password": "short"},
+    )
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "validation_error"
 
@@ -54,10 +71,18 @@ async def test_me_requires_valid_token(client):
 
 async def test_email_domain_restriction(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "allowed_email_domains", "jaipur.manipal.edu")
-    bad = await client.post("/auth/register", json={"name": "A", "email": "a@gmail.com", "password": "password123"})
+    bad = await client.post(
+        "/auth/register",
+        json={"name": "A", "email": "a@gmail.com", "password": "password123"},
+    )
     assert bad.status_code == 422 and bad.json()["error"]["code"] == "email_domain_not_allowed"
     ok = await client.post(
-        "/auth/register", json={"name": "A", "email": "a@jaipur.manipal.edu", "password": "password123"}
+        "/auth/register",
+        json={
+            "name": "A",
+            "email": "a@jaipur.manipal.edu",
+            "password": "password123",
+        },
     )
     assert ok.status_code == 201
 

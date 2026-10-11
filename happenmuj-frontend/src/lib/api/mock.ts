@@ -189,6 +189,10 @@ export function createMockApi(opts: MockOptions = {}): Api {
       token = `tok-${u!.id}`;
       return { token, user: publicUser(u!) };
     },
+    async authConfig() { return { google_client_id: null }; }, // no Google in the sample-data preview
+    async googleLogin() {
+      return fail(503, 'google_not_configured', 'Google sign-in is not available in the sample-data preview.');
+    },
     async register(input: RegisterInput) {
       await wait();
       const email = input.email.trim().toLowerCase();

@@ -84,6 +84,8 @@ export interface User {
   preferred_categories: Category[];
   followed_club_ids: string[];
   managed_club_ids: string[];
+  email_verified?: boolean; // true when Google vouched for the address
+  auth_providers?: ('password' | 'google')[];
 }
 
 export interface SavedItem {

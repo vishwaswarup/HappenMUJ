@@ -13,7 +13,11 @@ export interface Api {
   setToken(token: string | null): void;
 
   // auth and profile
+  /** Public sign-in settings: the Google client id, or null when Google sign-in is not set up. */
+  authConfig(): Promise<{ google_client_id: string | null }>;
   login(email: string, password: string): Promise<{ token: string; user: User }>;
+  /** `credential` is the ID token Google Identity Services hands the browser. */
+  googleLogin(credential: string): Promise<{ token: string; user: User }>;
   register(input: RegisterInput): Promise<{ token: string; user: User }>;
   me(): Promise<User>;
   updateProfile(patch: ProfilePatch): Promise<User>;

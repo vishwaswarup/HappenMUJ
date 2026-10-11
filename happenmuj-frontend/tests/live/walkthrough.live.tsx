@@ -10,8 +10,8 @@ const API = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
 const opts = { timeout: 15000 };
 const get = async (path: string, token?: string) =>
   (await fetch(API + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })).json();
-const apiLogin = async (email: string) =>
-  (await (await fetch(API + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'demo1234' }) })).json()).access_token as string;
+const apiLogin = async (email: string, password = 'demo1234') =>
+  (await (await fetch(API + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })).json()).access_token as string;
 const mount = () => render(<AppProvider><App /></AppProvider>);
 
 async function signIn(email: string) {
@@ -22,6 +22,8 @@ async function signIn(email: string) {
   const submit = screen.getAllByRole('button', { name: 'Sign in' }).find((b) => b.getAttribute('type') === 'submit')!;
   fireEvent.click(submit);
   await waitFor(() => expect(screen.getByRole('button', { name: /Account menu/ })).toBeTruthy(), opts);
+  // The login page redirects away AFTER the account appears; wait for that, or it overrides the test's next navigate().
+  await waitFor(() => expect(document.body.textContent).not.toMatch(/You are signed in as/), opts);
 }
 const go = async (path: string) => { await act(async () => { navigate(path); }); };
 const istLocal = (daysAhead: number, hh: number) => {
@@ -66,7 +68,7 @@ describe('real backend, real UI', () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: /^Technical/ }, opts));
     fireEvent.click(screen.getByRole('button', { name: /^Cultural/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^ACM/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^ACM/ }, opts)); // the club list loads separately
     const acm = (await get('/clubs/acm')).id;
     const expected = (await get(`/events?category=technical&category=cultural&club=${acm}&page_size=50`)).total;
     expect(expected).toBeGreaterThan(0);
@@ -95,6 +97,24 @@ describe('real backend, real UI', () => {
     await waitFor(() => expect(screen.getAllByText(cancelled.title).length).toBeGreaterThan(0), opts);
     expect(document.body.textContent).toMatch(/cancel/i);
     expect(document.body.textContent).toContain(cancelled.cancel_reason);
+  });
+
+  it('sign up with name, personal email and password creates an unverified student who is signed in', async () => {
+    const email = `live.${Date.now()}@gmail.com`;
+    navigate('/login');
+    mount();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Create account' }, opts));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Live Signup' } });
+    expect(screen.queryByLabelText(/registration/i)).toBeNull(); // we do not ask for a registration number
+    fireEvent.change(screen.getByLabelText('Personal email'), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenough1' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Create account' }).find((b) => b.getAttribute('type') === 'submit')!);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Account menu/ })).toBeTruthy(), opts);
+    const tok = await apiLogin(email, 'longenough1');
+    const me = await get('/auth/me', tok);
+    expect(me).toMatchObject({ email, name: 'Live Signup', role: 'student', email_verified: false, auth_providers: ['password'] });
+    const cfg = await get('/auth/config');
+    expect(cfg.google_client_id === null || typeof cfg.google_client_id === 'string').toBe(true);
   });
 
   it('student: sign in, save, see it under My events, the calendar flags the clash, unsave', async () => {

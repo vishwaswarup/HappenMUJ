@@ -23,6 +23,9 @@ async def register(db: AsyncDatabase, data: RegisterIn) -> dict:
         "name": data.name.strip(),
         "email": email,
         "password_hash": hash_password(data.password),
+        "email_verified": False,  # a typed-in address proves nothing; Google sign-in does
+        "auth_providers": ["password"],
+        "google_sub": None,
         "role": "student",
         "interests": normalize_terms(data.interests),
         "preferred_categories": [],
@@ -40,9 +43,55 @@ async def register(db: AsyncDatabase, data: RegisterIn) -> dict:
 
 async def authenticate(db: AsyncDatabase, data: LoginIn) -> dict:
     user = await db.users.find_one({"email": data.email.lower()})
+    if user and not user.get("password_hash"):  # created through Google: there is no password to check
+        raise AppError(401, "use_google_sign_in", "This account signs in with Google. Choose 'Continue with Google'.")
     if not user or not verify_password(data.password, user["password_hash"]):
         raise unauthorized("Invalid email or password")
     return user
+
+
+async def login_with_google(db: AsyncDatabase, claims: dict) -> dict:
+    """Find or create the account for a verified Google identity.
+
+    1. Known Google id -> that account.
+    2. Known email -> link Google to it. If that account was made with a typed-in password, the address was never
+       verified, so anyone could have pre-registered it; the password is removed and only Google can sign in.
+    3. Otherwise -> create a student account (registration number to be filled in afterwards).
+    """
+    sub, email = claims["sub"], claims["email"].lower()
+    user = await db.users.find_one({"google_sub": sub})
+    if user:
+        return user
+    user = await db.users.find_one({"email": email})
+    if user:
+        # Return the document as it is after the update (find_one_and_update keeps this atomic).
+        return await db.users.find_one_and_update(
+            {"_id": user["_id"]},
+            {
+                "$set": {"google_sub": sub, "email_verified": True, "password_hash": None},
+                "$addToSet": {"auth_providers": "google"},
+            },
+            return_document=True,
+        )
+    doc = {
+        "name": (claims.get("name") or email.split("@")[0]).strip()[:100],
+        "email": email,
+        "password_hash": None,
+        "email_verified": True,
+        "auth_providers": ["google"],
+        "google_sub": sub,
+        "role": "student",
+        "interests": [],
+        "preferred_categories": [],
+        "followed_club_ids": [],
+        "created_at": timeutil.now(),
+        "schema_v": SCHEMA_VERSION,
+    }
+    try:
+        doc["_id"] = (await db.users.insert_one(doc)).inserted_id
+    except DuplicateKeyError:  # a concurrent first sign-in created it: use that one
+        return await db.users.find_one({"$or": [{"google_sub": sub}, {"email": email}]})
+    return doc
 
 
 async def get_user(db: AsyncDatabase, user_id: ObjectId) -> dict:

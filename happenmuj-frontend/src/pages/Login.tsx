@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
-import { isDemo } from '../lib/api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { api, isDemo } from '../lib/api';
 import { INTEREST_SUGGESTIONS } from '../lib/constants';
 import { useTitle } from '../lib/hooks';
 import { navigate, useLocation } from '../lib/router';
 import { useApp } from '../state/AppContext';
 import { Button, Field, Tabs } from '../components/ui';
+import { GoogleButton } from '../components/GoogleButton';
 
 const DEMOS = [
   { label: 'Student', email: 'student@muj-demo.edu', note: 'Ananya Verma, has saved events' },
@@ -14,7 +15,7 @@ const DEMOS = [
 
 export function LoginPage() {
   useTitle('Sign in');
-  const { login, register, user } = useApp();
+  const { login, googleLogin, register, user } = useApp();
   const { query } = useLocation();
   const next = query.get('next');
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
@@ -26,6 +27,10 @@ export function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleId, setGoogleId] = useState<string | null>(null);
+
+  // Offer Google only when the server has it configured.
+  useEffect(() => { api.authConfig().then((c) => setGoogleId(c.google_client_id), () => setGoogleId(null)); }, []);
 
   const go = async (fn: () => Promise<unknown>) => {
     setBusy(true); setFormError('');
@@ -58,7 +63,7 @@ export function LoginPage() {
         <Tabs label="Account" value={mode} onChange={(m) => { setMode(m); setErrors({}); setFormError(''); }} tabs={[{ id: 'in', label: 'Sign in' }, { id: 'up', label: 'Create account' }]} />
         <form onSubmit={submit} noValidate className="form">
           {mode === 'up' && <Field id="a-name" label="Name" error={errors.name}><input id="a-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!errors.name} /></Field>}
-          <Field id="a-email" label="Email" error={errors.email}><input id="a-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} /></Field>
+          <Field id="a-email" label={mode === 'up' ? 'Personal email' : 'Email'} error={errors.email} hint={mode === 'up' ? 'Use an email you own, like your Gmail. Your college Outlook address is not needed.' : undefined}><input id="a-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} /></Field>
           <Field id="a-pass" label="Password" error={errors.password} hint={mode === 'up' ? 'At least 8 characters.' : undefined}><input id="a-pass" type="password" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={!!errors.password} /></Field>
           {mode === 'up' && (
             <fieldset className="field">
@@ -74,6 +79,12 @@ export function LoginPage() {
           {formError && <p className="field__error" role="alert">{formError}</p>}
           <Button type="submit" variant="primary" size="lg" block loading={busy}>{mode === 'in' ? 'Sign in' : 'Create account'}</Button>
         </form>
+        {googleId && (
+          <>
+            <div className="auth__or" aria-hidden="true"><span>or</span></div>
+            <GoogleButton clientId={googleId} text={mode === 'in' ? 'signin_with' : 'signup_with'} onCredential={(credential) => go(() => googleLogin(credential))} />
+          </>
+        )}
       </div>
       {isDemo && (
         <aside className="auth__demo panel" aria-label="Demo accounts">

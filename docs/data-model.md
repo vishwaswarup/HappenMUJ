@@ -14,7 +14,7 @@ of a referenced document where it saves a join on a hot read, and pay for keepin
 |---|---|---|---|
 | `events` | an event of any type | `schedule`, `venue`, `fee`, `team`, `registration`, `contact`, `details`, `stats`, `featured`, `club_snapshot`, `tags`, a capped `change_log` | `club_id`, `creator_id`, `poster_file_id` (GridFS) |
 | `clubs` | a student club | `admin_ids` (array of user ids) | `requested_by`, `verified_by` |
-| `users` | a person | `interests`, `preferred_categories`, `followed_club_ids` | n/a |
+| `users` | a person | `interests`, `preferred_categories`, `followed_club_ids`, sign-in fields (`email_verified`, `auth_providers`, `google_sub`; `password_hash` may be null for Google-only accounts) | n/a |
 | `saved_events` | one user saving one event | a denormalised `event_start` | `user_id`, `event_id` |
 | `event_interactions` | one view / save / registration click | n/a | `event_id`, `user_id` (nullable) |
 | `posts` | a community post | `author_snapshot`, `scope`, counters, `recent_comments` (last 3) | `author_id`, `scope.ref_id` |

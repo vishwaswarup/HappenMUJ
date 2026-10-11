@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     platform_admin_password: str = "demo1234"
     app_timezone: str = "Asia/Kolkata"
     cors_origins: str = "http://localhost:5173"
+    # OAuth 2.0 "Web application" client id from Google Cloud Console. Empty = Google sign-in disabled.
+    google_client_id: str = ""
 
     @field_validator("allowed_email_domains", "cors_origins", mode="before")
     @classmethod

@@ -76,7 +76,12 @@ async def make_user(client):
         nonlocal counter
         counter += 1
         r = await client.post(
-            "/auth/register", json={"name": name, "email": email or f"user{counter}@example.com", "password": password}
+            "/auth/register",
+            json={
+                "name": name,
+                "email": email or f"user{counter}@example.com",
+                "password": password,
+            },
         )
         assert r.status_code == 201, r.text
         body = r.json()

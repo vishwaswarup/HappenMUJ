@@ -18,6 +18,7 @@ interface AppValue {
   user: User | null;
   authReady: boolean;
   login: (email: string, password: string) => Promise<User>;
+  googleLogin: (credential: string) => Promise<User>;
   register: (input: RegisterInput) => Promise<User>;
   logout: () => void;
   setUser: (u: User) => void;
@@ -124,6 +125,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const r = await api.login(email, password);
     return afterAuth(r.token, r.user);
   }, [afterAuth]);
+  const googleLogin = useCallback(async (credential: string) => {
+    const r = await api.googleLogin(credential);
+    return afterAuth(r.token, r.user);
+  }, [afterAuth]);
   const register = useCallback(async (input: RegisterInput) => {
     const r = await api.register(input);
     return afterAuth(r.token, r.user);
@@ -192,10 +197,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissDemo = useCallback(() => { setDemoDismissed(true); storageSet('happenmuj.demo-dismissed', '1'); }, []);
 
   const value = useMemo<AppValue>(() => ({
-    user, authReady, login, register, logout, setUser: setUserState,
+    user, authReady, login, googleLogin, register, logout, setUser: setUserState,
     saved, savedReady, isSaved: (id) => saved.has(id), toggleSave, reloadSaved, startRegistration, markRegistrationStarted,
     requireLogin, toast, theme, toggleTheme, demoDismissed, dismissDemo,
-  }), [user, authReady, login, register, logout, saved, savedReady, toggleSave, reloadSaved, startRegistration, markRegistrationStarted, requireLogin, toast, theme, toggleTheme, demoDismissed, dismissDemo]);
+  }), [user, authReady, login, googleLogin, register, logout, saved, savedReady, toggleSave, reloadSaved, startRegistration, markRegistrationStarted, requireLogin, toast, theme, toggleTheme, demoDismissed, dismissDemo]);
 
   return (
     <Ctx.Provider value={value}>

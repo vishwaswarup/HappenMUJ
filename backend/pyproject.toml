@@ -14,6 +14,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "email-validator>=2.2",
     "Pillow>=10.4",
+    "google-auth>=2.30",  # verifies Google sign-in ID tokens
+    "requests>=2.32",     # transport google-auth uses to fetch Google's signing certificates
 ]
 
 [dependency-groups]

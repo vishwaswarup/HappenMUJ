@@ -13,6 +13,8 @@ def _s(v: Any) -> str | None:
 def user_out(u: dict, managed_club_ids: list[str] | None = None) -> UserOut:
     return UserOut(
         managed_club_ids=managed_club_ids or [],
+        email_verified=bool(u.get("email_verified", False)),
+        auth_providers=u.get("auth_providers", []),
         id=str(u["_id"]),
         name=u["name"],
         email=u["email"],

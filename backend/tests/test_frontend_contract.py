@@ -18,7 +18,10 @@ async def api_client():
 
 
 async def test_api_prefix_alias_serves_the_same_routes(api_client, client):
-    r = await api_client.post("/auth/register", json={"name": "A", "email": "a@example.com", "password": "password123"})
+    r = await api_client.post(
+        "/auth/register",
+        json={"name": "A", "email": "a@example.com", "password": "password123"},
+    )
     assert r.status_code == 201
     login = await api_client.post("/auth/login", json={"email": "a@example.com", "password": "password123"})
     assert set(login.json()) >= {"access_token", "user"}
@@ -50,7 +53,12 @@ async def test_cors_allows_the_vite_dev_server(api_client):
 async def test_register_accepts_interests_and_user_has_managed_club_ids(api_client, client, make_club, admin):
     r = await api_client.post(
         "/auth/register",
-        json={"name": "S", "email": "s@example.com", "password": "password123", "interests": ["AI", " ai ", "Music"]},
+        json={
+            "name": "S",
+            "email": "s@example.com",
+            "password": "password123",
+            "interests": ["AI", " ai ", "Music"],
+        },
     )
     assert r.status_code == 201
     user = r.json()["user"]

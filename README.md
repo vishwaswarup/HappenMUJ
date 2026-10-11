@@ -5,7 +5,7 @@ project**. The backend is a FastAPI REST API on **MongoDB**, designed to show *w
 schemas, embedded documents vs references, aggregation pipelines, text search, TTL / partial / multikey indexes,
 GridFS, multi-document transactions and `$jsonSchema` validation.
 
-* **Backend: complete** (58 endpoints, tests against a real MongoDB, demo seed data).
+* **Backend: complete** (60 endpoints, tests against a real MongoDB, demo seed data).
 * **Frontend: done and wired to this API**: `happenmuj-frontend/` (Vite + React + TypeScript). See
   [Run the whole stack](#run-the-whole-stack-backend--frontend).
 
@@ -42,8 +42,31 @@ cp ../.env.example .env               # if you used local_mongo.sh, set MONGO_UR
 > developed and tested against a local `mongod` replica set started by `scripts/local_mongo.sh`. If compose
 > misbehaves, use the script.
 
-`.env` leaves `ALLOWED_EMAIL_DOMAINS` empty in development (any email may register). Set it to
-`jaipur.manipal.edu` to restrict sign-ups.
+## Signing in
+
+Two ways, both producing the same login token:
+
+* **Email and password.** Sign-up asks for a **name, a personal email (for example Gmail; the college Outlook address
+  is not needed) and a password**. Passwords are stored as argon2 hashes. A typed-in email is *not verified*: anyone
+  can enter any address.
+* **Sign in with Google.** Proves the person owns the Google account, so the email is marked verified. A first-time
+  Google user gets a student account automatically. If a password account already exists for that Google email, the
+  two are linked and **the password is removed** (otherwise someone who pre-registered a victim's address with a
+  password they know could keep access); from then on that account signs in with Google.
+
+There is deliberately no registration-number field: it could not be verified against any college record, so it
+would only look like a check. `ALLOWED_EMAIL_DOMAINS` (empty by default) can still restrict password sign-ups to
+certain domains. Google sign-in is hidden until you configure it:
+
+1. Open <https://console.cloud.google.com/>, create a project, and set up the **OAuth consent screen** (External).
+   While it is in *Testing* mode only the test users you list can sign in; publish it for everyone.
+2. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.** Under *Authorized
+   JavaScript origins* add `http://localhost:5173` (and your real site address later). No redirect URI is needed.
+3. Copy the **Client ID** (ends in `.apps.googleusercontent.com`) into `backend/.env` as `GOOGLE_CLIENT_ID=...`
+   and restart the API. The frontend learns the id from `GET /api/auth/config`, so nothing is set on its side.
+4. Reload the sign-in page: a **Continue with Google** button appears.
+
+Without a client id the API answers `503 google_not_configured` for `/auth/google` and the button is not shown.
 
 **Demo logins** (created by the seed; password `demo1234` for every seeded user):
 
@@ -227,7 +250,7 @@ honest "where relational wins" list.
 | [docs/AGGREGATION_SHOWCASE.md](docs/AGGREGATION_SHOWCASE.md) | 20 pipelines and queries: purpose, exact JSON, `explain("executionStats")`; TTL, validation, GridFS, transactions. **Generated** from the live code and database |
 | [docs/SQL_COMPARISON.md](docs/SQL_COMPARISON.md) | The same schema as 36 relational tables; the type-specific `details` problem; Top 10 and comment thread in SQL; where SQL wins |
 | [docs/sql/](docs/sql/) | `relational_schema.sql` and `queries.sql` (executed on PostgreSQL 16) |
-| [docs/API.md](docs/API.md) | All 58 endpoints with auth requirements and parameters. **Generated** from the app |
+| [docs/API.md](docs/API.md) | All 60 endpoints with auth requirements and parameters. **Generated** from the app |
 | [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md) | Every judgment call made while building, one line each |
 | [CLAUDE.md](CLAUDE.md) | Conventions and commands for working in this repo |
 
@@ -265,7 +288,8 @@ Makefile       make help
 |---|---|
 | `MONGO_URI`, `DB_NAME` | Connection (must be a replica set) and database name |
 | `JWT_SECRET`, `JWT_EXPIRE_MINUTES` | Access-token signing key and lifetime (change the secret outside development) |
-| `ALLOWED_EMAIL_DOMAINS` | Comma-separated sign-up allow-list; empty = any email (development) |
+| `ALLOWED_EMAIL_DOMAINS` | Optional comma-separated allow-list for password sign-ups; empty = any email |
+| `GOOGLE_CLIENT_ID` | OAuth "Web application" client id; empty = Google sign-in off (see [Signing in](#signing-in)) |
 | `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_PASSWORD` | The platform admin is created at startup if missing (an existing password is never overwritten) |
 | `APP_TIMEZONE` | `Asia/Kolkata`: day boundaries for Today/Tomorrow/Next 7 Days/calendar |
 | `CORS_ORIGINS` | Comma-separated allowed origins for the future frontend |
@@ -274,7 +298,7 @@ Makefile       make help
 
 ```bash
 cd backend
-.venv/bin/pytest -q          # 202 tests, ~45 s (the seed test alone is ~15 s)
+.venv/bin/pytest -q          # 216 tests, ~50 s (the seed test alone is ~15 s)
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 

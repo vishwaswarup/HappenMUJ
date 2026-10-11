@@ -8,8 +8,8 @@ and are queried in many ways, so I used MongoDB. I embedded data that is read to
 without bound, used aggregation pipelines for ranking, and tested everything against a real database."
 
 ## Numbers to know
-9 collections + GridFS (11 stores) · 20 secondary indexes · 58 endpoints · 16 clubs, 40 seeded events ·
-202 backend tests (real MongoDB) + 74-check end-to-end script · SQL equivalent: **36 tables**, 18 of them just for event `details`.
+9 collections + GridFS (11 stores) · 21 secondary indexes · 60 endpoints · 16 clubs, 40 seeded events ·
+216 backend tests (real MongoDB) + 74-check end-to-end script · SQL equivalent: **36 tables**, 18 of them just for event `details`.
 
 ## The five NoSQL points
 
@@ -45,7 +45,7 @@ Time: stored in UTC, "tomorrow" computed on India-time boundaries. · Frontend: 
 - No foreign keys: the app enforces integrity (SQL does it declaratively, 47 FKs).
 - Counters can drift if someone edits the database by hand (transactions prevent it from app failures).
 - A renamed user keeps their old name on old posts (club renames *are* propagated).
-- Authentication has no email verification, rate limiting or password reset yet.
+- Password sign-ups do not verify the email (Google sign-in does); there is no rate limiting or password reset yet.
 - One index (`category_start`) was required by the brief but the planner doesn't use it.
 - `docker-compose.yml` was never run; development used a local `mongod`. The seed has no sports events (no sports club in the list).
 

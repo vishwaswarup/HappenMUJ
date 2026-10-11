@@ -86,6 +86,7 @@ export function createHttpApi(baseUrl: string): Api {
     id: String(u.id ?? u._id), name: u.name, email: u.email, role: u.role,
     interests: u.interests ?? [], preferred_categories: u.preferred_categories ?? [],
     followed_club_ids: (u.followed_club_ids ?? []).map(String), managed_club_ids: (u.managed_club_ids ?? []).map(String),
+    email_verified: !!u.email_verified, auth_providers: u.auth_providers ?? [],
   });
   const club = (c: Json): Club => ({
     id: String(c.id ?? c._id), name: c.name, slug: c.slug, description: c.description ?? '', category: c.category ?? 'other',
@@ -108,6 +109,15 @@ export function createHttpApi(baseUrl: string): Api {
     mode: 'http',
     setToken(t) { token = t; },
 
+    async authConfig() {
+      const r = await req('GET', '/auth/config');
+      return { google_client_id: (r.google_client_id as string | null) ?? null };
+    },
+    async googleLogin(credential) {
+      const r = await req('POST', '/auth/google', { body: { credential } });
+      token = r.access_token;
+      return { token: token!, user: user(await req('GET', '/auth/me')) };
+    },
     async login(email, password) {
       const r = await req('POST', '/auth/login', { body: { email, password } });
       token = r.access_token;

@@ -10,6 +10,13 @@ EVENT_INTERACTION_TTL_SECONDS = 90 * 24 * 3600
 INDEXES: dict[str, list[IndexModel]] = {
     "users": [
         IndexModel([("email", ASC)], unique=True, name="email_unique"),
+        # Unique only for accounts that HAVE a Google id (password-only accounts have none).
+        IndexModel(
+            [("google_sub", ASC)],
+            unique=True,
+            name="google_sub_unique",
+            partialFilterExpression={"google_sub": {"$type": "string"}},
+        ),
         IndexModel([("followed_club_ids", ASC)], name="followed_clubs_multikey"),  # multikey: club follower counts
     ],
     "clubs": [

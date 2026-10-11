@@ -2,7 +2,7 @@
 
 _Generated from the running FastAPI app by `backend/scripts/gen_api_docs.py`; regenerate it after changing routes. The interactive version (with request/response examples) is Swagger UI at `/docs`._
 
-**58 endpoints** under `/api/v1`, plus `GET /health` and `/docs`.
+**60 endpoints** under `/api/v1`, plus `GET /health` and `/docs`.
 
 ## Conventions
 
@@ -23,6 +23,8 @@ _Generated from the running FastAPI app by `backend/scripts/gen_api_docs.py`; re
 | POST | `/auth/register` | public | - | Create a student account |
 | POST | `/auth/login` | public | - | Log in |
 | GET | `/auth/me` | login | - | Current user |
+| GET | `/auth/config` | public | - | Public sign-in settings (is Google sign-in available?) |
+| POST | `/auth/google` | public | - | Sign in or sign up with Google (send the ID token Google gave the browser) |
 
 ## Users
 

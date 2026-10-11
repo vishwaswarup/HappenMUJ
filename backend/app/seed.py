@@ -262,6 +262,7 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
 
     async def add_user(name: str, email: str, role: str = "student", **extra: Any) -> dict:
         doc = {"name": name, "email": email, "password_hash": pw_hash, "role": role, "interests": [],
+               "email_verified": True, "auth_providers": ["password"], "google_sub": None,
                "preferred_categories": [], "followed_club_ids": [], "created_at": now - timedelta(days=rng.randint(5, 60)),
                "schema_v": SCHEMA_VERSION, **extra}  # fmt: skip
         doc["_id"] = (await db.users.insert_one(doc)).inserted_id
@@ -271,7 +272,8 @@ async def run_seed(db: AsyncDatabase, *, reset: bool) -> dict:
     await db.users.update_one(
         {"email": DEMO_ADMIN},
         {"$set": {"role": "platform_admin", "password_hash": pw_hash, "name": "Platform Admin"},
-         "$setOnInsert": {"interests": [], "preferred_categories": [], "followed_club_ids": [], "created_at": now, "schema_v": SCHEMA_VERSION}},
+         "$setOnInsert": {"interests": [], "preferred_categories": [], "followed_club_ids": [], "created_at": now, "schema_v": SCHEMA_VERSION,
+                          "email_verified": True, "auth_providers": ["password"], "google_sub": None}},
         upsert=True,
     )  # fmt: skip
     admin = await db.users.find_one({"email": DEMO_ADMIN})

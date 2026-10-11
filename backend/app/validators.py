@@ -47,7 +47,10 @@ VALIDATORS: dict[str, dict] = {
         "properties": {
             "name": {"bsonType": "string", "minLength": 1},
             "email": {"bsonType": "string"},
-            "password_hash": {"bsonType": "string"},
+            "password_hash": {"bsonType": ["string", "null"]},  # null for Google-only accounts
+            "google_sub": {"bsonType": ["string", "null"]},
+            "email_verified": {"bsonType": "bool"},
+            "auth_providers": {"bsonType": "array", "items": {"enum": ["password", "google"]}},
             "role": {"enum": ROLES},
             "interests": {"bsonType": "array", "items": {"bsonType": "string"}},
             "preferred_categories": {"bsonType": "array", "items": {"enum": CATEGORIES}},

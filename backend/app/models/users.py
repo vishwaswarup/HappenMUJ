@@ -10,15 +10,29 @@ Role = Literal["student", "club_admin", "platform_admin"]
 
 class RegisterIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    email: EmailStr
+    email: EmailStr  # any email the student owns, e.g. a personal Gmail
     password: str = Field(min_length=8, max_length=128)
     interests: list[str] = Field(default=[], max_length=50)
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"name": "Aarav Sharma", "email": "aarav@jaipur.manipal.edu", "password": "s3cretpass"}]
+            "examples": [
+                {
+                    "name": "Aarav Sharma",
+                    "email": "aarav.sharma@gmail.com",
+                    "password": "s3cretpass",
+                }
+            ]
         }
     }
+
+
+class GoogleLoginIn(BaseModel):
+    credential: str = Field(min_length=10, description="The Google ID token from Google Identity Services")
+
+
+class AuthConfigOut(BaseModel):
+    google_client_id: str | None  # null when Google sign-in is not configured
 
 
 class LoginIn(BaseModel):
@@ -39,6 +53,8 @@ class UserOut(BaseModel):
     preferred_categories: list[str]
     followed_club_ids: list[str]
     managed_club_ids: list[str] = []  # clubs whose admin_ids contain this user
+    email_verified: bool = False  # true when Google vouched for the address
+    auth_providers: list[str] = []  # "password" and/or "google"
     created_at: datetime
 
     model_config = {
