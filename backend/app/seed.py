@@ -26,6 +26,7 @@ from pymongo import UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app import db as db_module
+from app.config import get_settings, is_local_uri
 from app.core import timeutil
 from app.core.security import hash_password
 from app.main import prepare_database
@@ -537,7 +538,10 @@ def print_summary(res: dict) -> None:
 async def main() -> None:
     ap = argparse.ArgumentParser(description="Seed the HappenMUJ database with demo data")
     ap.add_argument("--reset", action="store_true", help="drop the configured database first")
+    ap.add_argument("--allow-remote", action="store_true", help="permit --reset on a non-local MongoDB (DANGEROUS)")
     args = ap.parse_args()
+    if args.reset and not is_local_uri(get_settings().mongo_uri) and not args.allow_remote:
+        raise SystemExit("Refusing to --reset a non-local MongoDB (pass --allow-remote if you really mean it).")
     db = await db_module.init_db()
     try:
         print(f"Seeding database '{db.name}'" + (" (reset)" if args.reset else ""))

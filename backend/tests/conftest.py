@@ -6,6 +6,7 @@ os.environ["DB_NAME"] = "happenmuj_test"
 os.environ["ALLOWED_EMAIL_DOMAINS"] = ""
 os.environ["PLATFORM_ADMIN_EMAIL"] = "admin@example.com"
 os.environ["PLATFORM_ADMIN_PASSWORD"] = "admin-password-1"
+os.environ["RATE_LIMIT_AUTH"] = "0"  # tests sign in constantly; the limiter has its own test
 os.environ["JWT_SECRET"] = "test-secret-test-secret-test-secret"
 
 import httpx  # noqa: E402

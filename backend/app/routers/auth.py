@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.config import get_settings
 from app.core.deps import DB, CurrentUser
 from app.core.errors import ErrorResponse
+from app.core.ratelimit import limit_auth
 from app.core.security import create_access_token
 from app.models.users import AuthConfigOut, GoogleLoginIn, LoginIn, RegisterIn, TokenOut, UserOut
 from app.services import google_auth
@@ -20,14 +21,21 @@ async def _token(db, user: dict) -> TokenOut:
     "/register",
     response_model=TokenOut,
     status_code=201,
-    responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
+    dependencies=[Depends(limit_auth)],
     summary="Create a student account",
 )
 async def register(data: RegisterIn, db: DB) -> TokenOut:
     return await _token(db, await svc.register(db, data))
 
 
-@router.post("/login", response_model=TokenOut, responses={401: {"model": ErrorResponse}}, summary="Log in")
+@router.post(
+    "/login",
+    response_model=TokenOut,
+    responses={401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
+    dependencies=[Depends(limit_auth)],
+    summary="Log in",
+)
 async def login(data: LoginIn, db: DB) -> TokenOut:
     return await _token(db, await svc.authenticate(db, data))
 
@@ -45,7 +53,8 @@ async def auth_config() -> AuthConfigOut:
 @router.post(
     "/google",
     response_model=TokenOut,
-    responses={401: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    responses={401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    dependencies=[Depends(limit_auth)],
     summary="Sign in or sign up with Google (send the ID token Google gave the browser)",
 )
 async def google_login(data: GoogleLoginIn, db: DB) -> TokenOut:

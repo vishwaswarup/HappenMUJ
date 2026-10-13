@@ -148,6 +148,9 @@ async def bootstrap_platform_admin(db: AsyncDatabase) -> None:
                 "followed_club_ids": [],
                 "created_at": timeutil.now(),
                 "schema_v": SCHEMA_VERSION,
+                "email_verified": True,  # the operator set this address in the environment
+                "auth_providers": ["password"],
+                "google_sub": None,
             },
         },
         upsert=True,

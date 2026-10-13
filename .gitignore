@@ -4,3 +4,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mongo-data/
+docs/dossier/
+# Personal task list (not for the repo)
+TASKS.md

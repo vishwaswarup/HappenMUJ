@@ -40,6 +40,9 @@ async def prepare_database() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings = get_settings()
+    if settings.app_env == "production" and (problems := settings.production_problems()):
+        raise RuntimeError("Refusing to start with APP_ENV=production: " + "; ".join(problems))
     await db_module.init_db()
     await prepare_database()
     yield
@@ -72,6 +75,7 @@ def create_app() -> FastAPI:
         alias.include_router(r)
     app.include_router(alias, include_in_schema=False)
 
+    @app.get("/api/health", include_in_schema=False)  # hosting health checks / the frontend's /api base
     @app.get("/health", tags=["meta"], summary="Liveness + MongoDB connectivity")
     async def health() -> dict:
         db = db_module.get_db()
